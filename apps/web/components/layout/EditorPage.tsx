@@ -11,7 +11,7 @@ import { useHistoryStore } from "@/stores/historyStore";
 import { useFileHandler } from "@/hooks/useFileHandler";
 import { useAutosave } from "@/hooks/useAutosave";
 import { PdfParser } from "@/hooks/usePdfParser";
-import type { SerializableTextObject } from "@/stores/documentStore";
+import type { SerializableTextObject, SerializableImageObject } from "@/stores/documentStore";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { LeftSidebar } from "@/components/layout/LeftSidebar";
@@ -36,6 +36,7 @@ export function EditorPage() {
     selectedObjects, selectObject, clearSelection, setDirty, reloadTrigger,
     setTextObjects, removeTextObject, updateTextObject, addTextObject, textObjects,
     annotations, addAnnotation, removeAnnotation, updateAnnotation,
+    imageObjects, addImageObject, removeImageObject, updateImageObject,
   } = useDocumentStore();
   const { zoom, panOffset, setPanOffset, leftSidebarOpen, rightPanelOpen } = useUIStore();
   const { undo, redo, canUndo, canRedo, push } = useHistoryStore();
@@ -131,6 +132,21 @@ export function EditorPage() {
             redo: () => removed.forEach((obj) => useDocumentStore.getState().removeTextObject(obj.id)),
           });
           removed.forEach((obj) => removeTextObject(obj.id));
+        }
+        // Also handle image deletion (R43-R47)
+        const toRemoveImages = selectedObjects
+          .filter((obj) => obj.type === 'image');
+        if (toRemoveImages.length > 0) {
+          const removedImgs = [...toRemoveImages];
+          useHistoryStore.getState().push({
+            label: 'Delete image',
+            undo: () => removedImgs.forEach((obj) => {
+              const img = useDocumentStore.getState().imageObjects.find((i) => i.id === obj.id);
+              if (img) addImageObject(img);
+            }),
+            redo: () => removedImgs.forEach((obj) => removeImageObject(obj.id)),
+          });
+          toRemoveImages.forEach((obj) => removeImageObject(obj.id));
         }
         // Also handle annotation deletion
         const toRemoveAnnotations = selectedObjects
@@ -352,7 +368,8 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
   const containerRef = useRef<HTMLDivElement>(null);
   const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const { textObjects, selectedObjects, selectObject, clearSelection, setDirty, reloadTrigger,
-    setTextObjects, addTextObject, annotations, addAnnotation, updateAnnotation } = useDocumentStore();
+    setTextObjects, addTextObject, annotations, addAnnotation, updateAnnotation,
+    imageObjects, updateImageObject, addImageObject } = useDocumentStore();
   const { activeTool, toolOptions } = useToolStore();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const renderScale = zoom;
@@ -600,11 +617,45 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
       return;
     }
 
+    // Image tool - add new image at click position (R46)
+    if (activeTool === 'image') {
+      e.preventDefault();
+      e.stopPropagation();
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (ev) => {
+        const file = (ev.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (re) => {
+          const src = re.target?.result as string;
+          const id = `img-${Date.now()}`;
+          const newObj: SerializableImageObject = {
+            id,
+            pageIndex,
+            x: pos.x - 100,
+            y: pos.y - 75,
+            width: 200,
+            height: 150,
+            rotation: 0,
+            src,
+            opacity: 1,
+          };
+          addImageObject(newObj);
+          selectObject({ id, type: 'image', pageIndex });
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+
     // Select tool: deselect if clicking page background
     if (activeTool === 'select') {
       clearSelection();
     }
-  }, [activeTool, pageIndex, getPointerPosition, toolOptions, addAnnotation, selectObject, addTextObject, clearSelection]);
+  }, [activeTool, pageIndex, getPointerPosition, toolOptions, addAnnotation, selectObject, addTextObject, clearSelection, addImageObject]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!shapeStartPos && !isDrawingStroke) return;
@@ -882,7 +933,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
         );
       })}
 
-      {/* Image overlays */}
+      {/* Image overlays — pdf-engine ImageObject instances */}
       {pageObjects.images.map((imgObj: any) => {
         const bbox = imgObj.getBBox();
         const isSelected = pageSelected.some((o) => o.id === imgObj.getId());
@@ -893,6 +944,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
             style={{
               left: bbox.x, top: bbox.y,
               width: bbox.width, height: bbox.height,
+              transform: `rotate(${bbox.rotation ?? 0}deg)`,
               opacity: imgObj.getOpacity?.() ?? 1,
             }}
             onClick={(e) => {
@@ -900,7 +952,31 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
               selectObject({ id: imgObj.getId(), type: "image", pageIndex });
             }}
           >
-            {isSelected && <SelectionHandles bbox={bbox} onResize={() => {}} onRotateStart={() => {}} onRotateMove={() => {}} />}
+            {isSelected && (
+              <SelectionHandles
+                bbox={bbox}
+                onResize={(handle, dx, dy) => {
+                  let newX = bbox.x, newY = bbox.y, newW = bbox.width, newH = bbox.height;
+                  if (handle === 'nw') { newX += dx; newY += dy; newW -= dx; newH -= dy; }
+                  else if (handle === 'ne') { newY += dy; newW += dx; newH -= dy; }
+                  else if (handle === 'se') { newW += dx; newH += dy; }
+                  else if (handle === 'sw') { newX += dx; newW -= dx; newH += dy; }
+                  else if (handle === 'n') { newY += dy; newH -= dy; }
+                  else if (handle === 's') { newH += dy; }
+                  else if (handle === 'e') { newW += dx; }
+                  else if (handle === 'w') { newX += dx; newW -= dx; }
+                  if (newW > 10 && newH > 10) {
+                    imgObj.setBBox({ x: newX, y: newY, width: newW, height: newH });
+                    setDirty(true);
+                  }
+                }}
+                onRotateStart={() => {}}
+                onRotateMove={(deg) => {
+                  imgObj.setRotation(deg);
+                  setDirty(true);
+                }}
+              />
+            )}
             <img
               src={imgObj.getSrc?.() ?? ""}
               className="w-full h-full object-cover pointer-events-none"
@@ -910,6 +986,59 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
           </div>
         );
       })}
+
+      {/* Zustand ImageObject overlays (R43-R47) — user-added images */}
+      {imageObjects
+        .filter((img) => img.pageIndex === pageIndex)
+        .map((img) => {
+          const isSelected = pageSelected.some((o) => o.id === img.id);
+          return (
+            <div
+              key={img.id}
+              className="absolute cursor-move"
+              style={{
+                left: img.x, top: img.y,
+                width: img.width, height: img.height,
+                transform: `rotate(${img.rotation}deg)`,
+                opacity: img.opacity ?? 1,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                selectObject({ id: img.id, type: "image", pageIndex });
+              }}
+            >
+              {isSelected && (
+                <SelectionHandles
+                  bbox={{ x: img.x, y: img.y, width: img.width, height: img.height, rotation: img.rotation }}
+                  onResize={(handle, dx, dy) => {
+                    let newX = img.x, newY = img.y, newW = img.width, newH = img.height;
+                    if (handle === 'nw') { newX += dx; newY += dy; newW -= dx; newH -= dy; }
+                    else if (handle === 'ne') { newY += dy; newW += dx; newH -= dy; }
+                    else if (handle === 'se') { newW += dx; newH += dy; }
+                    else if (handle === 'sw') { newX += dx; newW -= dx; newH += dy; }
+                    else if (handle === 'n') { newY += dy; newH -= dy; }
+                    else if (handle === 's') { newH += dy; }
+                    else if (handle === 'e') { newW += dx; }
+                    else if (handle === 'w') { newX += dx; newW -= dx; }
+                    if (newW > 10 && newH > 10) {
+                      updateImageObject(img.id, { x: newX, y: newY, width: newW, height: newH });
+                    }
+                  }}
+                  onRotateStart={() => {}}
+                  onRotateMove={(deg) => {
+                    updateImageObject(img.id, { rotation: deg });
+                  }}
+                />
+              )}
+              <img
+                src={img.src}
+                className="w-full h-full object-contain pointer-events-none"
+                draggable={false}
+                alt=""
+              />
+            </div>
+          );
+        })}
 
       {/* Zustand Annotation overlays (R35-R42) */}
       {pageAnnotations.map((ann) => {

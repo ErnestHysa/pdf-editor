@@ -94,6 +94,19 @@ export interface SerializableTextObject {
   objectRef: string; // PDF object ref like "45 0 R"
 }
 
+/** Serializable image object for use in Zustand store */
+export interface SerializableImageObject {
+  id: string;
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  src: string; // base64 data URL
+  opacity: number;
+}
+
 export interface SelectedObject {
   id: string;
   type: 'text' | 'image' | 'annotation';
@@ -107,6 +120,7 @@ interface DocumentState {
   pdfDocument: PdfDocument | null;
   pdfJsDoc: PdfJsDocumentProxy | null; // pdf.js document proxy for rendering
   textObjects: SerializableTextObject[];       // parsed text objects from PdfParser
+  imageObjects: SerializableImageObject[];      // image objects added by user
   fileName: string;
   fileSize: number;
   isDirty: boolean;
@@ -147,6 +161,10 @@ interface DocumentState {
   addAnnotation: (annotation: AnnotationObject) => void;
   removeAnnotation: (id: string) => void;
   updateAnnotation: (id: string, updates: Partial<AnnotationObject>) => void;
+  // Image management (R43-R47)
+  addImageObject: (obj: SerializableImageObject) => void;
+  removeImageObject: (id: string) => void;
+  updateImageObject: (id: string, updates: Partial<SerializableImageObject>) => void;
 }
 
 const initialState = {
@@ -160,6 +178,7 @@ const initialState = {
   activePageIndex: 0,
   reloadTrigger: 0,
   textObjects: [],
+  imageObjects: [],
   clipboard: [],
   annotations: [],
 };
@@ -363,6 +382,26 @@ export const useDocumentStore = create<DocumentState>()(
         const idx = state.annotations.findIndex((a) => a.id === id);
         if (idx !== -1) {
           state.annotations[idx] = { ...state.annotations[idx], ...updates } as AnnotationObject;
+          state.isDirty = true;
+        }
+      }),
+    // ── Image management (R43-R47) ────────────────────────────────
+    addImageObject: (obj) =>
+      set((state) => {
+        state.imageObjects.push(obj);
+        state.isDirty = true;
+      }),
+    removeImageObject: (id) =>
+      set((state) => {
+        state.imageObjects = state.imageObjects.filter((o) => o.id !== id);
+        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
+        state.isDirty = true;
+      }),
+    updateImageObject: (id, updates) =>
+      set((state) => {
+        const idx = state.imageObjects.findIndex((o) => o.id === id);
+        if (idx !== -1) {
+          state.imageObjects[idx] = { ...state.imageObjects[idx], ...updates } as SerializableImageObject;
           state.isDirty = true;
         }
       }),
