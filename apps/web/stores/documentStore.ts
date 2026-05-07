@@ -2,6 +2,77 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { PdfDocument } from '@pagecraft/pdf-engine';
 
+// ── Annotation types ────────────────────────────────────────────
+
+export type AnnotationType =
+  | 'highlight'
+  | 'underline'
+  | 'strikethrough'
+  | 'sticky'
+  | 'comment'
+  | 'drawing'
+  | 'rectangle'
+  | 'ellipse'
+  | 'arrow'
+  | 'line';
+
+export interface BaseAnnotation {
+  id: string;
+  type: AnnotationType;
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  opacity: number;
+}
+
+export interface HighlightAnnotation extends BaseAnnotation {
+  type: 'highlight';
+  color: string;
+  opacity: number;
+}
+
+export interface LineAnnotation extends BaseAnnotation {
+  type: 'underline' | 'strikethrough';
+  fontSize: number;
+}
+
+export interface StickyAnnotation extends BaseAnnotation {
+  type: 'sticky';
+  content: string;
+  color: string;
+}
+
+export interface CommentAnnotation extends BaseAnnotation {
+  type: 'comment';
+  content: string;
+  author: string;
+  timestamp: number;
+}
+
+export interface DrawingAnnotation extends BaseAnnotation {
+  type: 'drawing';
+  points: Array<{ x: number; y: number }>;
+  strokeWidth: number;
+  imageData: string;
+}
+
+export interface ShapeAnnotation extends BaseAnnotation {
+  type: 'rectangle' | 'ellipse' | 'arrow' | 'line';
+  strokeWidth: number;
+  filled: boolean;
+}
+
+export type AnnotationObject =
+  | HighlightAnnotation
+  | LineAnnotation
+  | StickyAnnotation
+  | CommentAnnotation
+  | DrawingAnnotation
+  | ShapeAnnotation;
+
 /** Serializable text object for use in Zustand store */
 export interface SerializableTextObject {
   id: string;
@@ -44,6 +115,7 @@ interface DocumentState {
   activePageIndex: number;
   reloadTrigger: number; // incremented to force pdf.js reload (e.g. after rotation)
   clipboard: SerializableTextObject[]; // copied text objects for paste
+  annotations: AnnotationObject[]; // R35-R42 annotation objects
 
   // Actions
   setDocument: (doc: PdfDocument | null, fileName?: string, fileSize?: number) => void;
@@ -71,6 +143,10 @@ interface DocumentState {
   duplicatePage: (index: number) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
   insertPagesFromFile: (file: File, afterIndex: number) => Promise<number>;
+  // Annotation management (R35-R42)
+  addAnnotation: (annotation: AnnotationObject) => void;
+  removeAnnotation: (id: string) => void;
+  updateAnnotation: (id: string, updates: Partial<AnnotationObject>) => void;
 }
 
 const initialState = {
@@ -85,6 +161,7 @@ const initialState = {
   reloadTrigger: 0,
   textObjects: [],
   clipboard: [],
+  annotations: [],
 };
 
 export const useDocumentStore = create<DocumentState>()(
@@ -161,7 +238,7 @@ export const useDocumentStore = create<DocumentState>()(
         state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
       }),
     reset: () =>
-      set(() => ({ ...initialState })),
+      set(() => ({ ...initialState, annotations: [] })),
 
     // ── Page Management ────────────────────────────────────────
     addPage: (afterIndex = -1, size) => {
@@ -269,6 +346,26 @@ export const useDocumentStore = create<DocumentState>()(
       });
       return count;
     },
+    // ── Annotation management (R35-R42) ──────────────────────────
+    addAnnotation: (annotation) =>
+      set((state) => {
+        state.annotations.push(annotation);
+        state.isDirty = true;
+      }),
+    removeAnnotation: (id) =>
+      set((state) => {
+        state.annotations = state.annotations.filter((a) => a.id !== id);
+        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
+        state.isDirty = true;
+      }),
+    updateAnnotation: (id, updates) =>
+      set((state) => {
+        const idx = state.annotations.findIndex((a) => a.id === id);
+        if (idx !== -1) {
+          state.annotations[idx] = { ...state.annotations[idx], ...updates } as AnnotationObject;
+          state.isDirty = true;
+        }
+      }),
     copySelected: () =>
       set((state) => {
         const selected = state.selectedObjects.filter((o) => o.type === 'text');
