@@ -32,10 +32,10 @@ export function EditorPage() {
   const {
     pdfDocument, setDocument, pdfJsDoc, setPdfJsDoc, activePageIndex, setActivePage,
     selectedObjects, selectObject, clearSelection, setDirty, reloadTrigger,
-    setTextObjects, removeTextObject,
+    setTextObjects, removeTextObject, updateTextObject, addTextObject, textObjects,
   } = useDocumentStore();
   const { zoom, panOffset, setPanOffset, leftSidebarOpen, rightPanelOpen } = useUIStore();
-  const { undo, redo, canUndo, canRedo } = useHistoryStore();
+  const { undo, redo, canUndo, canRedo, push } = useHistoryStore();
   const { activeTool } = useToolStore();
   const deviceType = useDeviceType();
   const { handleFile } = useFileHandler();
@@ -111,11 +111,20 @@ export function EditorPage() {
       if (e.key === "Escape") { clearSelection(); }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedObjects.length > 0) {
         e.preventDefault();
-        // Remove all selected text objects from Zustand store
-        selectedObjects.forEach((obj) => {
-          if (obj.type === 'text') removeTextObject(obj.id);
-          // annotation/image deletion goes in R21
-        });
+        // Snapshot all selected text objects before removal for undo
+        const toRemove = selectedObjects
+          .filter((obj) => obj.type === 'text')
+          .map((obj) => textObjects.find((t) => t.id === obj.id))
+          .filter(Boolean) as SerializableTextObject[];
+        if (toRemove.length > 0) {
+          const removed = [...toRemove];
+          useHistoryStore.getState().push({
+            label: 'Delete text',
+            undo: () => removed.forEach((obj) => useDocumentStore.getState().addTextObject(obj)),
+            redo: () => removed.forEach((obj) => useDocumentStore.getState().removeTextObject(obj.id)),
+          });
+          removed.forEach((obj) => removeTextObject(obj.id));
+        }
         clearSelection();
       }
 
@@ -314,7 +323,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
           const rect = containerRef.current?.getBoundingClientRect();
           if (!rect) return;
           const newId = `text-${pageIndex}-${Date.now()}`;
-          addTextObject({
+          const newObj = {
             id: newId,
             content: 'New Text',
             pageIndex,
@@ -330,8 +339,13 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
             textAlign: toolOptions.textAlign ?? 'left',
             rotation: 0,
             objectRef: "new",
+          };
+          useHistoryStore.getState().push({
+            label: 'Add text',
+            undo: () => useDocumentStore.getState().removeTextObject(newId),
+            redo: () => useDocumentStore.getState().addTextObject(newObj),
           });
-          // Immediately enter editing mode
+          addTextObject(newObj);
           setEditingTextId(newId);
           return;
         }
@@ -383,8 +397,14 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
                 textObject={textObj}
                 onClose={() => setEditingTextId(null)}
                 onSave={(newContent) => {
+                  const oldContent = textObj.content;
+                  useHistoryStore.getState().push({
+                    label: 'Edit text',
+                    undo: () => useDocumentStore.getState().updateTextObject(textObj.id, { content: oldContent }),
+                    redo: () => useDocumentStore.getState().updateTextObject(textObj.id, { content: newContent }),
+                  });
                   useDocumentStore.getState().updateTextObject(textObj.id, { content: newContent });
-                  useDocumentStore.getState().setDirty(true);
+                  setDirty(true);
                   setEditingTextId(null);
                 }}
               />
