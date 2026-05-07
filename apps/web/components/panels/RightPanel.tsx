@@ -1,6 +1,6 @@
 "use client";
 import { useUIStore } from "@/stores/uiStore";
-import { useDocumentStore } from "@/stores/documentStore";
+import { useDocumentStore, type SerializableTextObject } from '@/stores/documentStore';
 import { useToolStore, ToolOptions } from "@/stores/toolStore";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ interface RightPanelProps {
 
 export function RightPanel({ open }: RightPanelProps) {
   const { rightPanelOpen, toggleRightPanel } = useUIStore();
-  const { selectedObjects, pdfDocument, forceReload } = useDocumentStore();
+  const { selectedObjects, pdfDocument, forceReload, textObjects, updateTextObject, setDirty } = useDocumentStore();
   const { toolOptions, setToolOption } = useToolStore();
 
   if (!open || !rightPanelOpen) return null;
@@ -43,22 +43,31 @@ export function RightPanel({ open }: RightPanelProps) {
 
         {selection?.type === "text" && (
           <TextPropertiesPanel
-            toolOptions={toolOptions}
-            setToolOption={setToolOption}
+            selectedObject={
+              selectedObjects.find((o) => o.id === selection.id && o.type === "text")
+                ? textObjects.find((o) => o.id === selection.id)
+                : undefined
+            }
+            onStyleChange={(updates) => {
+              if (selection.id) {
+                updateTextObject(selection.id, updates);
+                setDirty(true);
+              }
+            }}
           />
         )}
 
         {selection?.type === "image" && (
           <ImagePropertiesPanel
             toolOptions={toolOptions}
-            setToolOption={setToolOption}
+            setToolOption={setToolOption as (key: string, value: unknown) => void}
           />
         )}
 
         {selection?.type === "annotation" && (
           <AnnotationPropertiesPanel
             toolOptions={toolOptions}
-            setToolOption={setToolOption}
+            setToolOption={setToolOption as (key: string, value: unknown) => void}
           />
         )}
       </div>
@@ -99,14 +108,27 @@ function PagePropertiesPanel({ page, onRotateDone }: { page: any; onRotateDone: 
   );
 }
 
-function TextPropertiesPanel({ toolOptions, setToolOption }: { toolOptions: ToolOptions; setToolOption: any }) {
+function TextPropertiesPanel({
+  selectedObject,
+  onStyleChange,
+}: {
+  selectedObject?: SerializableTextObject;
+  onStyleChange: (updates: Partial<SerializableTextObject>) => void;
+}) {
+  // Use selected object's style directly
+  const fontSize = selectedObject?.fontSize ?? 14;
+  const textColor = selectedObject?.color ?? '#F0EDE8';
+  const fontWeight = selectedObject?.fontWeight ?? 'normal';
+  const fontStyle = selectedObject?.fontStyle ?? 'normal';
+  const textAlign = selectedObject?.textAlign ?? 'left';
+
   return (
     <div className="space-y-4">
       <PropertySection title="Font Size">
         <input
           type="number"
-          value={toolOptions.fontSize ?? 14}
-          onChange={(e) => setToolOption("fontSize", parseFloat(e.target.value))}
+          value={fontSize}
+          onChange={(e) => onStyleChange({ fontSize: parseFloat(e.target.value) })}
           className="w-full bg-bg-elevated border border-border rounded px-2 py-1 text-sm font-mono text-text-primary"
           min={6} max={200}
         />
@@ -116,30 +138,26 @@ function TextPropertiesPanel({ toolOptions, setToolOption }: { toolOptions: Tool
         <div className="flex items-center gap-2">
           <input
             type="color"
-            value={toolOptions.textColor ?? "#F0EDE8"}
-            onChange={(e) => setToolOption("textColor", e.target.value)}
+            value={textColor}
+            onChange={(e) => onStyleChange({ color: e.target.value })}
             className="w-8 h-8 rounded border border-border cursor-pointer"
           />
-          <span className="text-sm font-mono text-text-secondary">{toolOptions.textColor}</span>
+          <span className="text-sm font-mono text-text-secondary">{textColor}</span>
         </div>
       </PropertySection>
 
       <PropertySection title="Style">
         <div className="flex gap-1">
           <ToggleButton
-            active={toolOptions.fontWeight === "bold"}
-            onClick={() =>
-              setToolOption("fontWeight", toolOptions.fontWeight === "bold" ? "normal" : "bold")
-            }
+            active={fontWeight === "bold"}
+            onClick={() => onStyleChange({ fontWeight: fontWeight === "bold" ? "normal" : "bold" })}
             className="font-bold"
           >
             B
           </ToggleButton>
           <ToggleButton
-            active={toolOptions.fontStyle === "italic"}
-            onClick={() =>
-              setToolOption("fontStyle", toolOptions.fontStyle === "italic" ? "normal" : "italic")
-            }
+            active={fontStyle === "italic"}
+            onClick={() => onStyleChange({ fontStyle: fontStyle === "italic" ? "normal" : "italic" })}
             className="italic"
           >
             I
@@ -152,10 +170,10 @@ function TextPropertiesPanel({ toolOptions, setToolOption }: { toolOptions: Tool
           {(["left", "center", "right"] as const).map((align) => (
             <button
               key={align}
-              onClick={() => setToolOption("textAlign", align)}
+              onClick={() => onStyleChange({ textAlign: align })}
               className={cn(
                 "flex-1 py-1 text-xs rounded border transition-colors",
-                toolOptions.textAlign === align
+                textAlign === align
                   ? "border-accent text-accent bg-accent-muted"
                   : "border-border text-text-secondary hover:border-border-strong"
               )}
