@@ -1,21 +1,54 @@
 'use client';
+import { useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import {
   Sun, Moon, Download, Share2, Settings, PanelLeft, PanelRight,
-  Undo2, Redo2, FileText, Plus
+  Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDeviceType } from '@/hooks/useDeviceType';
+import {
+  downloadPdfWithChanges,
+  downloadPdfFlattened,
+  downloadPdfOptimized,
+  downloadPageAsPng,
+  downloadPageAsJpeg,
+} from '@/hooks/usePdfExporter';
 
 export function TopBar() {
-  const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel, setExportDialogOpen } = useUIStore();
+  const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel } = useUIStore();
   const { undo, redo, canUndo, canRedo, getLastAction } = useHistoryStore();
-  const { fileName, isDirty, pdfDocument } = useDocumentStore();
+  const { fileName, isDirty, pdfDocument, activePageIndex } = useDocumentStore();
   const deviceType = useDeviceType();
-
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const lastAction = getLastAction();
+
+  const handleExport = async (type: string) => {
+    setExportMenuOpen(false);
+    try {
+      switch (type) {
+        case 'pdf':
+          await downloadPdfWithChanges();
+          break;
+        case 'flattened':
+          await downloadPdfFlattened();
+          break;
+        case 'optimized':
+          await downloadPdfOptimized();
+          break;
+        case 'png':
+          await downloadPageAsPng(activePageIndex);
+          break;
+        case 'jpeg':
+          await downloadPageAsJpeg(activePageIndex);
+          break;
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  };
 
   return (
     <header
@@ -95,16 +128,79 @@ export function TopBar() {
       </div>
 
       {/* Right section */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 relative">
         {pdfDocument && (
           <>
+            {/* Save button */}
             <button
-              onClick={() => setExportDialogOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+              onClick={() => downloadPdfWithChanges()}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-sm hover:bg-bg-hover text-text-secondary text-sm transition-colors"
+              title="Save (download PDF)"
             >
-              <Download size={14} />
-              {deviceType !== 'mobile' && 'Export'}
+              <Save size={14} />
+              {deviceType !== 'mobile' && 'Save'}
             </button>
+
+            {/* Export dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+              >
+                <Download size={14} />
+                {deviceType !== 'mobile' && 'Export'}
+                <ChevronDown size={12} />
+              </button>
+
+              {exportMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-bg-elevated border border-border rounded-md shadow-lg z-50 py-1">
+                  <button
+                    onClick={() => handleExport('pdf')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
+                  >
+                    <FileText size={14} />
+                    Download PDF
+                  </button>
+                  <button
+                    onClick={() => handleExport('flattened')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
+                  >
+                    <FileArchive size={14} />
+                    Download Flattened
+                  </button>
+                  <button
+                    onClick={() => handleExport('optimized')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
+                  >
+                    <FileArchive size={14} />
+                    Download Optimized
+                  </button>
+                  <div className="border-t border-border my-1" />
+                  <button
+                    onClick={() => handleExport('png')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
+                  >
+                    <Image size={14} />
+                    Export Page as PNG
+                  </button>
+                  <button
+                    onClick={() => handleExport('jpeg')}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
+                  >
+                    <Image size={14} />
+                    Export Page as JPEG
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Click outside to close */}
+            {exportMenuOpen && (
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setExportMenuOpen(false)}
+              />
+            )}
           </>
         )}
 

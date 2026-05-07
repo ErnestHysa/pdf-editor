@@ -42,7 +42,7 @@ export function EditorPage() {
     annotations, addAnnotation, removeAnnotation, updateAnnotation,
     imageObjects, addImageObject, removeImageObject, updateImageObject,
   } = useDocumentStore();
-  const { zoom, panOffset, setPanOffset, leftSidebarOpen, rightPanelOpen } = useUIStore();
+  const { zoom, setZoom, panOffset, setPanOffset, leftSidebarOpen, rightPanelOpen } = useUIStore();
   const { undo, redo, canUndo, canRedo, push } = useHistoryStore();
   const { activeTool } = useToolStore();
   const deviceType = useDeviceType();
@@ -51,6 +51,10 @@ export function EditorPage() {
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // R54: Pinch-to-zoom refs
+  const lastPinchDistance = useRef<number | null>(null);
+  const initialZoom = useRef(zoom);
 
   // Autosave to IndexedDB whenever document is dirty
   useAutosave();
@@ -255,6 +259,28 @@ export function EditorPage() {
             if ((e.target as HTMLElement).classList.contains("canvas-scroll-root")) {
               clearSelection();
             }
+          }}
+          // R54: Pinch-to-zoom touch handlers
+          onTouchStart={(e) => {
+            if (e.touches.length === 2) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX;
+              const dy = e.touches[0].clientY - e.touches[1].clientY;
+              lastPinchDistance.current = Math.sqrt(dx * dx + dy * dy);
+              initialZoom.current = zoom;
+            }
+          }}
+          onTouchMove={(e) => {
+            if (e.touches.length === 2 && lastPinchDistance.current !== null) {
+              const dx = e.touches[0].clientX - e.touches[1].clientX;
+              const dy = e.touches[0].clientY - e.touches[1].clientY;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              const scale = distance / lastPinchDistance.current;
+              const newZoom = Math.min(Math.max(initialZoom.current * scale, 0.25), 4.0);
+              setZoom(newZoom);
+            }
+          }}
+          onTouchEnd={() => {
+            lastPinchDistance.current = null;
           }}
         >
           {/* Pages wrapper with zoom/pan transform */}
