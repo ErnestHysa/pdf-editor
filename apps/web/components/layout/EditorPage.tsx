@@ -9,6 +9,8 @@ import { useToolStore } from "@/stores/toolStore";
 import { useHistoryStore } from "@/stores/historyStore";
 import { useFileHandler } from "@/hooks/useFileHandler";
 import { useAutosave } from "@/hooks/useAutosave";
+import { PdfParser } from "@/hooks/usePdfParser";
+import type { SerializableTextObject } from "@/stores/documentStore";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { LeftSidebar } from "@/components/layout/LeftSidebar";
@@ -20,7 +22,7 @@ import { TextEditOverlay } from "@/components/canvas/TextEditOverlay";
 import { SelectionHandles } from "@/components/canvas/SelectionHandles";
 import { cn } from "@/lib/utils";
 import { useDeviceType } from "@/hooks/useDeviceType";
-import type { TextObject, Page, AnnotationObject } from "@pagecraft/pdf-engine";
+import { Page, AnnotationObject } from '@pagecraft/pdf-engine';
 
 // No singleton — pdf.js doc lives in Zustand (documentStore).
 // Do NOT use module-level state for cross-component reactivity.
@@ -30,6 +32,7 @@ export function EditorPage() {
   const {
     pdfDocument, setDocument, pdfJsDoc, setPdfJsDoc, activePageIndex, setActivePage,
     selectedObjects, selectObject, clearSelection, setDirty, reloadTrigger,
+    setTextObjects,
   } = useDocumentStore();
   const { zoom, panOffset, setPanOffset, leftSidebarOpen, rightPanelOpen } = useUIStore();
   const { undo, redo, canUndo, canRedo } = useHistoryStore();
@@ -65,6 +68,34 @@ export function EditorPage() {
     }).then((pdfDoc: pdfjsLib.PDFDocumentProxy) => {
       setPdfJsDoc(pdfDoc);
       setHasFile(true);
+
+      // R13: Parse text objects from pdf.js and store in Zustand
+      const parser = new PdfParser(pdfDoc);
+      parser.parseAllPages().then((pageMap) => {
+        const allObjects: SerializableTextObject[] = [];
+        pageMap.forEach((objs, pageIndex) => {
+          for (const obj of objs) {
+            allObjects.push({
+              id: `text-${pageIndex}-${obj.objectRef || Math.random().toString(36).slice(2)}`,
+              content: obj.content,
+              pageIndex,
+              x: obj.bbox.x,
+              y: obj.bbox.y,
+              width: obj.bbox.width,
+              height: obj.bbox.height,
+              fontSize: obj.style.fontSize,
+              fontFamily: obj.style.fontFamily,
+              fontWeight: obj.style.fontWeight,
+              fontStyle: obj.style.fontStyle,
+              color: obj.style.color,
+              textAlign: obj.style.textAlign,
+              rotation: obj.rotation ?? 0,
+              objectRef: obj.objectRef,
+            });
+          }
+        });
+        setTextObjects(allObjects);
+      });
     }).catch((err: unknown) => {
       setPdfError(err instanceof Error ? err.message : "Failed to load PDF");
     });
@@ -199,15 +230,20 @@ interface PageCanvasProps {
 function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }: PageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { selectedObjects, selectObject } = useDocumentStore();
   const { activeTool } = useToolStore();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const renderScale = zoom;
 
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
-  const objects = page.getObjects();
-  const selected = selectedObjects.filter((o) => o.pageIndex === pageIndex);
+  const { textObjects, selectedObjects, selectObject } = useDocumentStore();
+
+  // Text objects for THIS page only
+  const pageTextObjects = textObjects.filter((o) => o.pageIndex === pageIndex);
+  const pageSelected = selectedObjects.filter((o) => o.pageIndex === pageIndex);
+
+  // Images and annotations from pdf-lib class instances (not yet in Zustand)
+  const pageObjects = page.getObjects();
 
   // pdf.js doc comes from Zustand — reactively updated after setPdfJsDoc()
   const { pdfJsDoc } = useDocumentStore();
@@ -254,15 +290,6 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
     };
   }, [pdfJsDoc, pageIndex, renderScale, pageWidth, pageHeight]);
 
-  const handleTextClick = (textObj: TextObject, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (activeTool === "select") {
-      selectObject({ id: textObj.getId(), type: "text", pageIndex });
-    } else if (activeTool === "text") {
-      setEditingTextId(textObj.getId());
-    }
-  };
-
   return (
     <div
       ref={containerRef}
@@ -280,33 +307,41 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
         style={{ display: "block" }}
       />
 
-      {/* Text overlays */}
-      {objects.texts.map((textObj: TextObject) => {
-        const bbox = textObj.getBBox();
-        const style = textObj.getStyle();
-        const isSelected = selected.some((o) => o.id === textObj.getId());
+      {/* Text overlays — from Zustand textObjects */}
+      {pageTextObjects.map((textObj) => {
+        const isSelected = pageSelected.some((o) => o.id === textObj.id);
 
         return (
           <div
-            key={textObj.getId()}
+            key={textObj.id}
             className="absolute cursor-text"
             style={{
-              left: bbox.x,
-              top: bbox.y,
-              width: bbox.width,
-              minHeight: bbox.height,
+              left: textObj.x,
+              top: textObj.y,
+              width: textObj.width,
+              minHeight: textObj.height,
             }}
-            onClick={(e) => handleTextClick(textObj, e)}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (activeTool === "select") {
+                selectObject({ id: textObj.id, type: "text", pageIndex });
+              } else if (activeTool === "text") {
+                setEditingTextId(textObj.id);
+              }
+            }}
           >
             {isSelected && (
-              <SelectionHandles bbox={bbox} onRotate={() => {}} />
+              <SelectionHandles
+                bbox={{ x: textObj.x, y: textObj.y, width: textObj.width, height: textObj.height, rotation: textObj.rotation }}
+                onRotate={() => {}}
+              />
             )}
-            {editingTextId === textObj.getId() ? (
+            {editingTextId === textObj.id ? (
               <TextEditOverlay
                 textObject={textObj}
                 onClose={() => setEditingTextId(null)}
                 onSave={(newContent) => {
-                  textObj.setContent(newContent);
+                  useDocumentStore.getState().updateTextObject(textObj.id, { content: newContent });
                   useDocumentStore.getState().setDirty(true);
                   setEditingTextId(null);
                 }}
@@ -315,16 +350,16 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
               <span
                 className="block overflow-hidden whitespace-pre-wrap break-words"
                 style={{
-                  fontFamily: style.fontFamily,
-                  fontSize: style.fontSize,
-                  fontWeight: style.fontWeight,
-                  fontStyle: style.fontStyle,
-                  color: style.color,
-                  textAlign: style.textAlign,
+                  fontFamily: textObj.fontFamily,
+                  fontSize: textObj.fontSize,
+                  fontWeight: textObj.fontWeight,
+                  fontStyle: textObj.fontStyle,
+                  color: textObj.color,
+                  textAlign: textObj.textAlign,
                   lineHeight: 1.4,
                 }}
               >
-                {textObj.getContent()}
+                {textObj.content}
               </span>
             )}
           </div>
@@ -332,9 +367,9 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
       })}
 
       {/* Image overlays */}
-      {objects.images.map((imgObj: any) => {
+      {pageObjects.images.map((imgObj: any) => {
         const bbox = imgObj.getBBox();
-        const isSelected = selected.some((o) => o.id === imgObj.getId());
+        const isSelected = pageSelected.some((o) => o.id === imgObj.getId());
         return (
           <div
             key={imgObj.getId()}
@@ -361,9 +396,9 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
       })}
 
       {/* Annotation overlays */}
-      {objects.annotations.map((ann: AnnotationObject) => {
+      {pageObjects.annotations.map((ann: AnnotationObject) => {
         const bbox = ann.getRect();
-        const isSelected = selected.some((o) => o.id === ann.getId());
+        const isSelected = pageSelected.some((o) => o.id === ann.getId());
         return (
           <div
             key={ann.getId()}

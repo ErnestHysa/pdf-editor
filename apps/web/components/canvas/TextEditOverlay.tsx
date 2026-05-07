@@ -1,19 +1,17 @@
-'use client';
+"use client";
 import { useRef, useEffect, useState } from 'react';
-import { TextObject } from '@pagecraft/pdf-engine';
 import { cn } from '@/lib/utils';
+import type { SerializableTextObject } from '@/stores/documentStore';
 
 interface TextEditOverlayProps {
-  textObject: TextObject;
+  textObject: SerializableTextObject;
   onClose: () => void;
   onSave: (newContent: string) => void;
 }
 
 export function TextEditOverlay({ textObject, onClose, onSave }: TextEditOverlayProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [value, setValue] = useState(textObject.getContent());
-  const style = textObject.getStyle();
-  const bbox = textObject.getBBox();
+  const [value, setValue] = useState(textObject.content);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -43,14 +41,14 @@ export function TextEditOverlay({ textObject, onClose, onSave }: TextEditOverlay
         'text-edit-overlay resize-none overflow-hidden border-b outline-none',
       )}
       style={{
-        width: bbox.width,
-        minHeight: bbox.height,
-        fontFamily: style.fontFamily,
-        fontSize: style.fontSize,
-        fontWeight: style.fontWeight,
-        fontStyle: style.fontStyle,
-        color: style.color,
-        textAlign: style.textAlign,
+        width: textObject.width,
+        minHeight: textObject.height,
+        fontFamily: textObject.fontFamily,
+        fontSize: textObject.fontSize,
+        fontWeight: textObject.fontWeight,
+        fontStyle: textObject.fontStyle,
+        color: textObject.color,
+        textAlign: textObject.textAlign,
         lineHeight: 1.4,
         borderBottomColor: 'var(--accent)',
       }}
