@@ -20,6 +20,7 @@ import { MobileBottomSheet } from "@/components/mobile/MobileBottomSheet";
 import { ToolFAB } from "@/components/mobile/ToolFAB";
 import { TextEditOverlay } from "@/components/canvas/TextEditOverlay";
 import { SelectionHandles } from "@/components/canvas/SelectionHandles";
+import { ContextMenu } from "@/components/canvas/ContextMenu";
 import { cn } from "@/lib/utils";
 import { useDeviceType } from "@/hooks/useDeviceType";
 import { Page, AnnotationObject } from '@pagecraft/pdf-engine';
@@ -41,6 +42,7 @@ export function EditorPage() {
   const { handleFile } = useFileHandler();
   const [hasFile, setHasFile] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Autosave to IndexedDB whenever document is dirty
   useAutosave();
@@ -108,7 +110,10 @@ export function EditorPage() {
       if (isMod && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       if (isMod && e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
       if (isMod && e.key === "y") { e.preventDefault(); redo(); }
-      if (e.key === "Escape") { clearSelection(); }
+      if (isMod && e.key === "d") { e.preventDefault(); useDocumentStore.getState().duplicateSelected(); }
+      if (isMod && e.key === "c") { e.preventDefault(); useDocumentStore.getState().copySelected(); }
+      if (isMod && e.key === "v") { e.preventDefault(); useDocumentStore.getState().pasteClipboard(); }
+      if (e.key === "Escape") { clearSelection(); setContextMenu(null); }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedObjects.length > 0) {
         e.preventDefault();
         // Snapshot all selected text objects before removal for undo
@@ -131,6 +136,24 @@ export function EditorPage() {
       // Tool shortcuts (only when not typing in an input)
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+      // Tab navigation between text objects (R27)
+      if (e.key === 'Tab' && selectedObjects.length > 0) {
+        e.preventDefault();
+        const currentPageObjs = textObjects
+          .filter((o) => o.pageIndex === activePageIndex)
+          .sort((a, b) => a.y - b.y || a.x - b.x);
+        const currentId = selectedObjects[0]?.id;
+        const idx = currentPageObjs.findIndex((o) => o.id === currentId);
+        const next = e.shiftKey
+          ? currentPageObjs[(idx - 1 + currentPageObjs.length) % currentPageObjs.length]
+          : currentPageObjs[(idx + 1) % currentPageObjs.length];
+        if (next) {
+          selectObject({ id: next.id, type: 'text', pageIndex: next.pageIndex });
+        }
+        return;
+      }
+
       if (isMod) return; // don't override Cmd/Ctrl combos
 
       const { setTool } = useToolStore.getState();
@@ -185,6 +208,10 @@ export function EditorPage() {
         <div
           className="flex-1 overflow-auto bg-bg-base relative"
           style={{ touchAction: "none" }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu({ x: e.clientX, y: e.clientY });
+          }}
           onClick={(e) => {
             if ((e.target as HTMLElement).classList.contains("canvas-scroll-root")) {
               clearSelection();
@@ -228,6 +255,53 @@ export function EditorPage() {
           <MobileBottomSheet />
         </>
       )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            {
+              label: "Edit",
+              action: () => {
+                if (selectedObjects.length === 1) {
+                  const id = selectedObjects[0].id;
+                  // Trigger edit via a custom event so TextEditOverlay can pick it up
+                  window.dispatchEvent(new CustomEvent("edit-text-object", { detail: { id } }));
+                }
+              },
+              disabled: selectedObjects.length !== 1,
+            },
+            {
+              label: "Duplicate",
+              action: () => useDocumentStore.getState().duplicateSelected(),
+              disabled: selectedObjects.length === 0,
+            },
+            { label: "", action: () => {}, divider: true },
+            {
+              label: "Delete",
+              action: () => {
+                const toRemove = selectedObjects
+                  .filter((obj) => obj.type === "text")
+                  .map((obj) => textObjects.find((t) => t.id === obj.id))
+                  .filter(Boolean) as SerializableTextObject[];
+                if (toRemove.length > 0) {
+                  const removed = [...toRemove];
+                  useHistoryStore.getState().push({
+                    label: "Delete text",
+                    undo: () => removed.forEach((obj) => useDocumentStore.getState().addTextObject(obj)),
+                    redo: () => removed.forEach((obj) => useDocumentStore.getState().removeTextObject(obj.id)),
+                  });
+                  removed.forEach((obj) => removeTextObject(obj.id));
+                }
+                clearSelection();
+              },
+              disabled: selectedObjects.length === 0,
+            },
+          ]}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
@@ -250,6 +324,19 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
   const { activeTool, toolOptions } = useToolStore();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const renderScale = zoom;
+
+  // Listen for edit-text-object event from context menu
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail.id;
+      const textObj = textObjects.find((t) => t.id === id);
+      if (textObj && textObj.pageIndex === pageIndex) {
+        setEditingTextId(id);
+      }
+    };
+    window.addEventListener("edit-text-object", handler);
+    return () => window.removeEventListener("edit-text-object", handler);
+  }, [textObjects, pageIndex]);
 
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
@@ -380,7 +467,17 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
             onClick={(e) => {
               e.stopPropagation();
               if (activeTool === "select") {
-                selectObject({ id: textObj.id, type: "text", pageIndex });
+                if (e.shiftKey) {
+                  // Multi-select: toggle this object in selection
+                  const isCurrentlySelected = pageSelected.some((o) => o.id === textObj.id);
+                  if (isCurrentlySelected) {
+                    useDocumentStore.getState().removeFromSelection(textObj.id);
+                  } else {
+                    useDocumentStore.getState().addToSelection({ id: textObj.id, type: "text", pageIndex });
+                  }
+                } else {
+                  selectObject({ id: textObj.id, type: "text", pageIndex });
+                }
               } else if (activeTool === "text") {
                 setEditingTextId(textObj.id);
               }
@@ -389,7 +486,31 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
             {isSelected && (
               <SelectionHandles
                 bbox={{ x: textObj.x, y: textObj.y, width: textObj.width, height: textObj.height, rotation: textObj.rotation }}
-                onRotate={() => {}}
+                onResize={(handle, dx, dy) => {
+                  let newX = textObj.x, newY = textObj.y, newW = textObj.width, newH = textObj.height;
+                  if (handle === 'nw') { newX += dx; newY += dy; newW -= dx; newH -= dy; }
+                  else if (handle === 'ne') { newY += dy; newW += dx; newH -= dy; }
+                  else if (handle === 'se') { newW += dx; newH += dy; }
+                  else if (handle === 'sw') { newX += dx; newW -= dx; newH += dy; }
+                  else if (handle === 'n') { newY += dy; newH -= dy; }
+                  else if (handle === 's') { newH += dy; }
+                  else if (handle === 'e') { newW += dx; }
+                  else if (handle === 'w') { newX += dx; newW -= dx; }
+                  if (newW > 10 && newH > 10) {
+                    useHistoryStore.getState().push({
+                      label: 'Resize text',
+                      undo: () => useDocumentStore.getState().updateTextObject(textObj.id, { x: textObj.x, y: textObj.y, width: textObj.width, height: textObj.height }),
+                      redo: () => useDocumentStore.getState().updateTextObject(textObj.id, { x: newX, y: newY, width: newW, height: newH }),
+                    });
+                    useDocumentStore.getState().updateTextObject(textObj.id, { x: newX, y: newY, width: newW, height: newH });
+                    setDirty(true);
+                  }
+                }}
+                onRotateStart={() => {}}
+                onRotateMove={(deg) => {
+                  useDocumentStore.getState().updateTextObject(textObj.id, { rotation: deg });
+                  setDirty(true);
+                }}
               />
             )}
             {editingTextId === textObj.id ? (
@@ -410,7 +531,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
               />
             ) : (
               <span
-                className="block overflow-hidden whitespace-pre-wrap break-words"
+                className="block overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
                 style={{
                   fontFamily: textObj.fontFamily,
                   fontSize: textObj.fontSize,
@@ -446,7 +567,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
               selectObject({ id: imgObj.getId(), type: "image", pageIndex });
             }}
           >
-            {isSelected && <SelectionHandles bbox={bbox} onRotate={() => {}} />}
+            {isSelected && <SelectionHandles bbox={bbox} onResize={() => {}} onRotateStart={() => {}} onRotateMove={() => {}} />}
             <img
               src={imgObj.getSrc?.() ?? ""}
               className="w-full h-full object-cover pointer-events-none"
@@ -475,7 +596,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
               selectObject({ id: ann.getId(), type: "annotation", pageIndex });
             }}
           >
-            {isSelected && <SelectionHandles bbox={bbox} onRotate={() => {}} />}
+            {isSelected && <SelectionHandles bbox={bbox} onResize={() => {}} onRotateStart={() => {}} onRotateMove={() => {}} />}
             <AnnotationView annotation={ann} />
           </div>
         );

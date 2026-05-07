@@ -16,7 +16,7 @@ interface DragState {
 
 export function useCanvasInteraction() {
   const { zoom, panOffset, setPanOffset } = useUIStore();
-  const { selectObject } = useDocumentStore();
+  const { selectObject, updateTextObject, textObjects } = useDocumentStore();
   const { activeTool } = useToolStore();
 
   const dragState = useRef<DragState>({ type: null, startX: 0, startY: 0 });
@@ -37,11 +37,13 @@ export function useCanvasInteraction() {
     const canvasPt = screenToCanvas(e.clientX, e.clientY, canvasRect);
 
     if (activeTool === 'select' && clickedObjectId && pageIndex !== undefined) {
+      const obj = textObjects.find((o) => o.id === clickedObjectId);
       dragState.current = {
         type: 'move',
         startX: canvasPt.x,
         startY: canvasPt.y,
         objectId: clickedObjectId,
+        initialBBox: obj ? { x: obj.x, y: obj.y, width: obj.width, height: obj.height } : undefined,
       };
       selectObject({ id: clickedObjectId, type: 'text', pageIndex });
       setIsDragging(true);
@@ -50,9 +52,9 @@ export function useCanvasInteraction() {
       dragState.current = { type: 'pan', startX: e.clientX, startY: e.clientY };
       setIsDragging(true);
     }
-  }, [activeTool, screenToCanvas, selectObject]);
+  }, [activeTool, screenToCanvas, selectObject, textObjects]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent, canvasRect: DOMRect) => {
     const ds = dragState.current;
     if (!ds.type) return;
 
@@ -62,8 +64,15 @@ export function useCanvasInteraction() {
       setPanOffset({ x: panOffset.x + dx, y: panOffset.y + dy });
       ds.startX = e.clientX;
       ds.startY = e.clientY;
+    } else if (ds.type === 'move' && ds.objectId && ds.initialBBox) {
+      const currentCanvas = screenToCanvas(e.clientX, e.clientY, canvasRect);
+      const dx = currentCanvas.x - ds.startX;
+      const dy = currentCanvas.y - ds.startY;
+      const newX = ds.initialBBox.x + dx;
+      const newY = ds.initialBBox.y + dy;
+      updateTextObject(ds.objectId, { x: newX, y: newY });
     }
-  }, [panOffset, setPanOffset]);
+  }, [panOffset, setPanOffset, screenToCanvas, updateTextObject]);
 
   const handleMouseUp = useCallback(() => {
     dragState.current = { type: null, startX: 0, startY: 0 };

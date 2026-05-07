@@ -43,6 +43,7 @@ interface DocumentState {
   selectedObjects: SelectedObject[];
   activePageIndex: number;
   reloadTrigger: number; // incremented to force pdf.js reload (e.g. after rotation)
+  clipboard: SerializableTextObject[]; // copied text objects for paste
 
   // Actions
   setDocument: (doc: PdfDocument | null, fileName?: string, fileSize?: number) => void;
@@ -52,12 +53,17 @@ interface DocumentState {
   selectObject: (obj: SelectedObject | null) => void;
   selectObjects: (objs: SelectedObject[]) => void;
   clearSelection: () => void;
+  copySelected: () => void;
+  pasteClipboard: () => void;
+  duplicateSelected: () => void;
   setActivePage: (index: number) => void;
   forceReload: () => void;
   setTextObjects: (objects: SerializableTextObject[]) => void;
   addTextObject: (obj: SerializableTextObject) => void;
   removeTextObject: (id: string) => void;
   updateTextObject: (id: string, updates: Partial<SerializableTextObject>) => void;
+  addToSelection: (obj: SelectedObject) => void;
+  removeFromSelection: (id: string) => void;
   reset: () => void;
 }
 
@@ -72,6 +78,7 @@ const initialState = {
   activePageIndex: 0,
   reloadTrigger: 0,
   textObjects: [],
+  clipboard: [],
 };
 
 export const useDocumentStore = create<DocumentState>()(
@@ -137,7 +144,56 @@ export const useDocumentStore = create<DocumentState>()(
           state.textObjects[idx] = { ...state.textObjects[idx], ...updates } as SerializableTextObject;
         }
       }),
+    addToSelection: (obj) =>
+      set((state) => {
+        if (!state.selectedObjects.find((o) => o.id === obj.id)) {
+          state.selectedObjects.push(obj);
+        }
+      }),
+    removeFromSelection: (id) =>
+      set((state) => {
+        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
+      }),
     reset: () =>
       set(() => ({ ...initialState })),
+    copySelected: () =>
+      set((state) => {
+        const selected = state.selectedObjects.filter((o) => o.type === 'text');
+        state.clipboard = selected
+          .map((sel) => state.textObjects.find((t) => t.id === sel.id))
+          .filter(Boolean) as SerializableTextObject[];
+      }),
+    pasteClipboard: () =>
+      set((state) => {
+        if (state.clipboard.length === 0) return;
+        const newObjs: SerializableTextObject[] = state.clipboard.map((obj) => ({
+          ...obj,
+          id: `${obj.id}-copy-${Date.now()}`,
+          x: obj.x + 20,
+          y: obj.y + 20,
+          objectRef: 'new',
+        }));
+        newObjs.forEach((obj) => state.textObjects.push(obj));
+        state.isDirty = true;
+      }),
+    duplicateSelected: () =>
+      set((state) => {
+        const selected = state.selectedObjects.filter((o) => o.type === 'text');
+        const toDuplicate = selected
+          .map((sel) => state.textObjects.find((t) => t.id === sel.id))
+          .filter(Boolean) as SerializableTextObject[];
+        const newObjs: SerializableTextObject[] = toDuplicate.map((obj) => ({
+          ...obj,
+          id: `${obj.id}-dup-${Date.now()}`,
+          x: obj.x + 20,
+          y: obj.y + 20,
+          objectRef: 'new',
+        }));
+        newObjs.forEach((obj) => {
+          state.textObjects.push(obj);
+          state.selectedObjects.push({ id: obj.id, type: 'text', pageIndex: obj.pageIndex });
+        });
+        state.isDirty = true;
+      }),
   }))
 );

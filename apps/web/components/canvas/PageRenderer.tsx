@@ -101,7 +101,9 @@ export function PageRenderer({ page, pageIndex, isActive, scale }: PageRendererP
           {pageSelected.some((o) => o.id === textObj.id) && (
             <SelectionHandles
               bbox={{ x: textObj.x, y: textObj.y, width: textObj.width, height: textObj.height, rotation: textObj.rotation }}
-              onRotate={() => {}}
+              onResize={() => {}}
+              onRotateStart={() => {}}
+              onRotateMove={() => {}}
             />
           )}
 
@@ -156,7 +158,9 @@ export function PageRenderer({ page, pageIndex, isActive, scale }: PageRendererP
           {selectedObjects.some((o) => o.id === imgObj.getId()) && (
             <SelectionHandles
               bbox={imgObj.getBBox()}
-              onRotate={() => {}}
+              onResize={() => {}}
+              onRotateStart={() => {}}
+              onRotateMove={() => {}}
             />
           )}
           <img
