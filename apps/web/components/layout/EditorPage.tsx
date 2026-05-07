@@ -6,8 +6,12 @@ import * as pdfjsLib from 'pdfjs-dist/legacy';
 import { useDocumentStore } from "@/stores/documentStore";
 import type { AnnotationObject as ZustandAnnotation } from "@/stores/documentStore";
 import { useUIStore } from "@/stores/uiStore";
-import { useToolStore } from "@/stores/toolStore";
+import { UndoRedoPill } from "@/components/ui/UndoRedoPill";
+import { CommandPalette } from "@/components/ui/CommandPalette";
+import { KeyboardShortcutsOverlay } from "@/components/ui/KeyboardShortcutsOverlay";
+import { downloadPdfWithChanges } from "@/hooks/usePdfExporter";
 import { useHistoryStore } from "@/stores/historyStore";
+import { useToolStore } from "@/stores/toolStore";
 import { useFileHandler } from "@/hooks/useFileHandler";
 import { useAutosave } from "@/hooks/useAutosave";
 import { PdfParser } from "@/hooks/usePdfParser";
@@ -46,6 +50,7 @@ export function EditorPage() {
   const [hasFile, setHasFile] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Autosave to IndexedDB whenever document is dirty
   useAutosave();
@@ -117,6 +122,7 @@ export function EditorPage() {
       if (isMod && e.key === "c") { e.preventDefault(); useDocumentStore.getState().copySelected(); }
       if (isMod && e.key === "v") { e.preventDefault(); useDocumentStore.getState().pasteClipboard(); }
       if (e.key === "Escape") { clearSelection(); setContextMenu(null); }
+      if (e.key === '?') { e.preventDefault(); setShowShortcuts((v) => !v); }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedObjects.length > 0) {
         e.preventDefault();
         // Snapshot all selected text objects before removal for undo
@@ -281,6 +287,14 @@ export function EditorPage() {
 
         {deviceType !== "mobile" && <RightPanel open={rightPanelOpen} />}
       </div>
+
+      {/* Global UI overlays */}
+      <UndoRedoPill />
+      <CommandPalette />
+      {showShortcuts && (
+        <KeyboardShortcutsOverlay onClose={() => setShowShortcuts(false)} />
+      )}
+
 
       {deviceType === "mobile" && (
         <>
@@ -1537,7 +1551,6 @@ function AnnotationView({ annotation }: { annotation: AnnotationObject }) {
       return null;
   }
 }
-
 // ── Helpers ────────────────────────────────────────────────────
 function isPointInRect(
   point: { x: number; y: number },
