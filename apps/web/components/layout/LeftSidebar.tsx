@@ -1,10 +1,7 @@
-'use client';
-import { useRef, useCallback } from 'react';
-import { useUIStore } from '@/stores/uiStore';
-import { useDocumentStore } from '@/stores/documentStore';
-import { Plus, ChevronLeft } from 'lucide-react';
-import { PageThumbnails } from '@/components/canvas/PageThumbnails';
-import { cn } from '@/lib/utils';
+"use client";
+import { useUIStore } from "@/stores/uiStore";
+import { useDocumentStore } from "@/stores/documentStore";
+import { PageThumbnails } from "@/components/canvas/PageThumbnails";
 
 interface LeftSidebarProps {
   open: boolean;
@@ -31,11 +28,9 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
       </div>
 
       {/* Page thumbnails */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-2">
         {pdfDocument ? (
-          <PageThumbnails
-            pages={pdfDocument.getPages()}
-          />
+          <PageThumbnails pages={pdfDocument.getPages()} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-text-tertiary text-sm p-4 text-center">
             <p>No document open.</p>
