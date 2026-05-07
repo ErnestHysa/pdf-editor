@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import { openDB, IDBPDatabase } from "idb";
 import { useDocumentStore } from "@/stores/documentStore";
+import { exportPdfWithChanges } from "./usePdfExporter";
 import { AUTOSAVE_DELAY_MS } from "@/lib/constants";
 
 const DB_NAME = "pagecraft";
