@@ -17,8 +17,8 @@ export function RightPanel({ open }: RightPanelProps) {
   if (!open || !rightPanelOpen) return null;
 
   const selection = selectedObjects.length > 0 ? selectedObjects[0] : null;
-  const activePage = pdfDocument?.getPage(activePageIndex);
   const activePageIndex = useDocumentStore.getState().activePageIndex;
+  const activePage = pdfDocument?.getPage(activePageIndex);
 
   return (
     <aside className="w-[280px] shrink-0 bg-bg-surface border-l border-border flex flex-col overflow-hidden animate-slide-in">

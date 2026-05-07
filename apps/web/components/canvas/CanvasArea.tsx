@@ -7,7 +7,6 @@ import { useHistoryStore } from '@/stores/historyStore';
 import { usePdfRenderer } from '@/hooks/usePdfRenderer';
 import { ZoomControl } from './ZoomControl';
 import { PageRenderer } from './PageRenderer';
-import { SelectionOverlay } from './SelectionOverlay';
 import { cn } from '@/lib/utils';
 
 interface CanvasAreaProps {

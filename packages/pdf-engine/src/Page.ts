@@ -1,4 +1,4 @@
-import { PDFPage, PDFFlate, PDFContext } from 'pdf-lib';
+import { PDFPage } from 'pdf-lib';
 import { PdfDocument } from './Document';
 import { TextObject } from './objects/TextObject';
 import { ImageObject } from './objects/ImageObject';
@@ -70,7 +70,8 @@ export class Page {
 
   setRotation(degrees: number): void {
     // 0, 90, 180, 270
-    this.pdfPage.setRotation({ angle: degrees, type: 'degrees' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (this.pdfPage as any).setRotation(degrees);
   }
 
   getRotation(): number {

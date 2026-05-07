@@ -11,8 +11,8 @@ import { useDeviceType } from '@/hooks/useDeviceType';
 
 export function TopBar() {
   const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel, setExportDialogOpen } = useUIStore();
-  const { fileName, isDirty, undo, redo, canUndo, canRedo, getLastAction } = useHistoryStore();
-  const { pdfDocument } = useDocumentStore();
+  const { undo, redo, canUndo, canRedo, getLastAction } = useHistoryStore();
+  const { fileName, isDirty, pdfDocument } = useDocumentStore();
   const deviceType = useDeviceType();
 
   const lastAction = getLastAction();
