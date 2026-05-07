@@ -1,13 +1,8 @@
 'use client';
-import { useEffect, useRef, useCallback, useState } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
+import { useRef, useCallback, useState } from 'react';
+import * as pdfjsLib from 'pdfjs-dist/legacy';
 
-// Use the pdf.js worker from CDN
-if (typeof window !== 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (pdfjsLib.GlobalWorkerOptions as any).workerSrc =
-    `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-}
+// workerSrc is configured globally in @/lib/pdfWorkerConfig — do NOT set it again here.
 
 interface PdfRendererState {
   pdfDoc: pdfjsLib.PDFDocumentProxy | null;

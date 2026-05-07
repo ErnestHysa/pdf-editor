@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+// Must be first — configures pdf.js worker before any pdfjs-dist imports elsewhere
+import '@/lib/pdfWorkerConfig';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
 
 export const metadata: Metadata = {

@@ -11,7 +11,7 @@ interface RightPanelProps {
 
 export function RightPanel({ open }: RightPanelProps) {
   const { rightPanelOpen, toggleRightPanel } = useUIStore();
-  const { selectedObjects, pdfDocument } = useDocumentStore();
+  const { selectedObjects, pdfDocument, forceReload } = useDocumentStore();
   const { toolOptions, setToolOption } = useToolStore();
 
   if (!open || !rightPanelOpen) return null;
@@ -38,7 +38,7 @@ export function RightPanel({ open }: RightPanelProps) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
         {!selection && activePage && (
-          <PagePropertiesPanel page={activePage} />
+          <PagePropertiesPanel page={activePage} onRotateDone={forceReload} />
         )}
 
         {selection?.type === "text" && (
@@ -66,7 +66,7 @@ export function RightPanel({ open }: RightPanelProps) {
   );
 }
 
-function PagePropertiesPanel({ page }: { page: any }) {
+function PagePropertiesPanel({ page, onRotateDone }: { page: any; onRotateDone: () => void }) {
   return (
     <div className="space-y-4">
       <PropertySection title="Size">
@@ -87,7 +87,7 @@ function PagePropertiesPanel({ page }: { page: any }) {
           {[0, 90, 180, 270].map((deg) => (
             <button
               key={deg}
-              onClick={() => page.setRotation?.(deg)}
+              onClick={() => { page.setRotation?.(deg); onRotateDone(); }}
               className="flex-1 py-1 text-xs rounded border border-border hover:border-accent hover:text-accent transition-colors"
             >
               {deg}&deg;

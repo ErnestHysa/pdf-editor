@@ -30,7 +30,13 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
       {/* Page thumbnails */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-2">
         {pdfDocument ? (
-          <PageThumbnails pages={pdfDocument.getPages()} />
+          <PageThumbnails
+            pageCount={pdfDocument.getPageCount()}
+            getPageDimensions={(i) => {
+              const p = pdfDocument.getPages()[i];
+              return { width: p.getWidth(), height: p.getHeight() };
+            }}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-text-tertiary text-sm p-4 text-center">
             <p>No document open.</p>

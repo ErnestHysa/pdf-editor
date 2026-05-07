@@ -8,34 +8,43 @@ export interface SelectedObject {
   pageIndex: number;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PdfJsDocumentProxy = any;
+
 interface DocumentState {
   pdfDocument: PdfDocument | null;
+  pdfJsDoc: PdfJsDocumentProxy | null; // pdf.js document proxy for rendering
   fileName: string;
   fileSize: number;
   isDirty: boolean;
   isLoading: boolean;
   selectedObjects: SelectedObject[];
   activePageIndex: number;
+  reloadTrigger: number; // incremented to force pdf.js reload (e.g. after rotation)
 
   // Actions
   setDocument: (doc: PdfDocument | null, fileName?: string, fileSize?: number) => void;
+  setPdfJsDoc: (doc: PdfJsDocumentProxy | null) => void;
   setLoading: (loading: boolean) => void;
   setDirty: (dirty: boolean) => void;
   selectObject: (obj: SelectedObject | null) => void;
   selectObjects: (objs: SelectedObject[]) => void;
   clearSelection: () => void;
   setActivePage: (index: number) => void;
+  forceReload: () => void;
   reset: () => void;
 }
 
 const initialState = {
   pdfDocument: null,
+  pdfJsDoc: null,
   fileName: 'Untitled.pdf',
   fileSize: 0,
   isDirty: false,
   isLoading: false,
   selectedObjects: [],
   activePageIndex: 0,
+  reloadTrigger: 0,
 };
 
 export const useDocumentStore = create<DocumentState>()(
@@ -44,12 +53,15 @@ export const useDocumentStore = create<DocumentState>()(
     setDocument: (doc, fileName = 'Untitled.pdf', fileSize = 0) =>
       set((state) => {
         state.pdfDocument = doc;
+        state.pdfJsDoc = null; // reset pdf.js doc when switching files
         state.fileName = fileName;
         state.fileSize = fileSize;
         state.isDirty = false;
         state.activePageIndex = 0;
         state.selectedObjects = [];
       }),
+    setPdfJsDoc: (doc) =>
+      set((state) => { state.pdfJsDoc = doc; }),
     setLoading: (loading) =>
       set((state) => { state.isLoading = loading; }),
     setDirty: (dirty) =>
@@ -69,6 +81,11 @@ export const useDocumentStore = create<DocumentState>()(
     setActivePage: (index) =>
       set((state) => {
         state.activePageIndex = index;
+      }),
+    forceReload: () =>
+      set((state) => {
+        state.reloadTrigger = state.reloadTrigger + 1;
+        state.pdfJsDoc = null; // clear so canvases unmount
       }),
     reset: () =>
       set(() => ({ ...initialState })),

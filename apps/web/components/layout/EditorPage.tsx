@@ -2,7 +2,7 @@
 import {
   useEffect, useRef, useCallback, useState, useMemo,
 } from "react";
-import * as pdfjsLib from "pdfjs-dist";
+import * as pdfjsLib from 'pdfjs-dist/legacy';
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useToolStore } from "@/stores/toolStore";
@@ -21,28 +21,14 @@ import { cn } from "@/lib/utils";
 import { useDeviceType } from "@/hooks/useDeviceType";
 import type { TextObject, Page, AnnotationObject } from "@pagecraft/pdf-engine";
 
-// Singleton renderer shared across page canvases
-let _pdfRenderer: {
-  pdfDoc: pdfjsLib.PDFDocumentProxy | null;
-  pdfLibDoc: any; // the pdf-lib doc from our engine
-  pageCount: number;
-} = { pdfDoc: null, pdfLibDoc: null, pageCount: 0 };
-
-export function setPdfRenderer(pdfDoc: pdfjsLib.PDFDocumentProxy, pdfLibDoc: unknown) {
-  _pdfRenderer.pdfDoc = pdfDoc;
-  _pdfRenderer.pdfLibDoc = pdfLibDoc;
-  _pdfRenderer.pageCount = pdfDoc.numPages;
-}
-
-export function getPdfRenderer() {
-  return _pdfRenderer;
-}
+// No singleton — pdf.js doc lives in Zustand (documentStore).
+// Do NOT use module-level state for cross-component reactivity.
 
 // ── EditorPage ────────────────────────────────────────────────
 export function EditorPage() {
   const {
-    pdfDocument, setDocument, activePageIndex, setActivePage,
-    selectedObjects, selectObject, clearSelection, setDirty,
+    pdfDocument, setDocument, pdfJsDoc, setPdfJsDoc, activePageIndex, setActivePage,
+    selectedObjects, selectObject, clearSelection, setDirty, reloadTrigger,
   } = useDocumentStore();
   const { zoom, panOffset, setPanOffset, leftSidebarOpen, rightPanelOpen } = useUIStore();
   const { undo, redo, canUndo, canRedo } = useHistoryStore();
@@ -52,7 +38,18 @@ export function EditorPage() {
   const [hasFile, setHasFile] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
-  // When document is set, load it into pdf.js
+  // Page element refs for scroll-into-view navigation
+  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // When activePageIndex changes, scroll that page into view
+  useEffect(() => {
+    const el = pageRefs.current[activePageIndex];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activePageIndex]);
+
+  // When document is set OR reloadTrigger fires, reload pdf.js
   useEffect(() => {
     if (!pdfDocument) { setHasFile(false); return; }
     const libDoc = pdfDocument.getLibDoc();
@@ -62,12 +59,12 @@ export function EditorPage() {
       const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
       return pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
     }).then((pdfDoc: pdfjsLib.PDFDocumentProxy) => {
-      setPdfRenderer(pdfDoc, libDoc);
+      setPdfJsDoc(pdfDoc);
       setHasFile(true);
     }).catch((err: unknown) => {
       setPdfError(err instanceof Error ? err.message : "Failed to load PDF");
     });
-  }, [pdfDocument]);
+  }, [pdfDocument, reloadTrigger]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -79,6 +76,28 @@ export function EditorPage() {
       if (e.key === "Escape") { clearSelection(); }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedObjects.length > 0) {
         // Delete in R21+
+      }
+
+      // Tool shortcuts (only when not typing in an input)
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if (isMod) return; // don't override Cmd/Ctrl combos
+
+      const { setTool } = useToolStore.getState();
+      switch (e.key.toUpperCase()) {
+        case 'V': setTool('select'); break;
+        case 'T': setTool('text'); break;
+        case 'R': setTool('rectangle'); break;
+        case 'E': setTool('ellipse'); break;
+        case 'L': setTool('line'); break;
+        case 'A': setTool('arrow'); break;
+        case 'H': setTool('highlight'); break;
+        case 'U': setTool('underline'); break;
+        case 'S': setTool('strikethrough'); break;
+        case 'N': setTool('sticky'); break;
+        case 'C': setTool('comment'); break;
+        case 'D': setTool('draw'); break;
+        case 'I': setTool('image'); break;
       }
     };
     window.addEventListener("keydown", handler);
@@ -131,14 +150,19 @@ export function EditorPage() {
             }}
           >
             {pages.map((page, i) => (
-              <PageCanvas
+              <div
                 key={i}
-                page={page}
-                pageIndex={i}
-                isActive={i === activePageIndex}
-                onPageClick={() => setActivePage(i)}
-                onTextEdit={(id) => { /* wired in R11 */ }}
-              />
+                ref={(el) => { pageRefs.current[i] = el; }}
+              >
+                <PageCanvas
+                  page={page}
+                  pageIndex={i}
+                  isActive={i === activePageIndex}
+                  onPageClick={() => setActivePage(i)}
+                  onTextEdit={(id) => { /* wired in R11 */ }}
+                  zoom={zoom}
+                />
+              </div>
             ))}
           </div>
 
@@ -165,37 +189,38 @@ interface PageCanvasProps {
   isActive: boolean;
   onPageClick: () => void;
   onTextEdit: (objectId: string) => void;
+  zoom: number;
 }
 
-function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit }: PageCanvasProps) {
+function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }: PageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { selectedObjects, selectObject } = useDocumentStore();
   const { activeTool } = useToolStore();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [renderScale, setRenderScale] = useState(1.5); // 1.5x for quality
+  const renderScale = zoom;
 
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
   const objects = page.getObjects();
   const selected = selectedObjects.filter((o) => o.pageIndex === pageIndex);
 
-  // Render with pdf.js when page becomes visible or scale changes
+  // pdf.js doc comes from Zustand — reactively updated after setPdfJsDoc()
+  const { pdfJsDoc } = useDocumentStore();
+
+  // Render with pdf.js when pdfJsDoc or scale changes
   useEffect(() => {
-    const renderer = getPdfRenderer();
-    const pdfDoc = renderer.pdfDoc;
-    if (!pdfDoc || !canvasRef.current) return;
+    if (!pdfJsDoc || !canvasRef.current) return;
 
     let cancelled = false;
     let task: pdfjsLib.RenderTask | null = null;
 
     (async () => {
       try {
-        const pdfPage = await pdfDoc.getPage(pageIndex + 1);
+        const pdfPage = await pdfJsDoc.getPage(pageIndex + 1);
         if (cancelled) return;
 
-        const scale = renderScale;
-        const viewport = pdfPage.getViewport({ scale });
+        const viewport = pdfPage.getViewport({ scale: renderScale });
         const canvas = canvasRef.current!;
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -211,7 +236,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit }: Page
           intent: "display",
         });
 
-        await task.promise;
+        if (task) await task.promise;
       } catch (err: unknown) {
         if ((err as { name?: string })?.name !== "RenderingCancelledException") {
           console.error(`Page ${pageIndex} render error:`, err);
@@ -223,7 +248,7 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit }: Page
       cancelled = true;
       if (task) task.cancel();
     };
-  }, [pageIndex, renderScale, pageWidth, pageHeight]);
+  }, [pdfJsDoc, pageIndex, renderScale, pageWidth, pageHeight]);
 
   const handleTextClick = (textObj: TextObject, e: React.MouseEvent) => {
     e.stopPropagation();
