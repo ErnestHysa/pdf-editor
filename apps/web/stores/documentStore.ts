@@ -55,6 +55,8 @@ interface DocumentState {
   setActivePage: (index: number) => void;
   forceReload: () => void;
   setTextObjects: (objects: SerializableTextObject[]) => void;
+  addTextObject: (obj: SerializableTextObject) => void;
+  removeTextObject: (id: string) => void;
   updateTextObject: (id: string, updates: Partial<SerializableTextObject>) => void;
   reset: () => void;
 }
@@ -116,6 +118,17 @@ export const useDocumentStore = create<DocumentState>()(
     setTextObjects: (objects) =>
       set((state) => {
         state.textObjects = objects;
+      }),
+    addTextObject: (obj) =>
+      set((state) => {
+        state.textObjects.push(obj);
+        state.isDirty = true;
+      }),
+    removeTextObject: (id) =>
+      set((state) => {
+        state.textObjects = state.textObjects.filter((o) => o.id !== id);
+        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
+        state.isDirty = true;
       }),
     updateTextObject: (id: string, updates: Partial<SerializableTextObject>) =>
       set((state) => {

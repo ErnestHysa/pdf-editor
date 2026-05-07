@@ -32,7 +32,7 @@ export function EditorPage() {
   const {
     pdfDocument, setDocument, pdfJsDoc, setPdfJsDoc, activePageIndex, setActivePage,
     selectedObjects, selectObject, clearSelection, setDirty, reloadTrigger,
-    setTextObjects,
+    setTextObjects, removeTextObject,
   } = useDocumentStore();
   const { zoom, panOffset, setPanOffset, leftSidebarOpen, rightPanelOpen } = useUIStore();
   const { undo, redo, canUndo, canRedo } = useHistoryStore();
@@ -110,7 +110,13 @@ export function EditorPage() {
       if (isMod && e.key === "y") { e.preventDefault(); redo(); }
       if (e.key === "Escape") { clearSelection(); }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedObjects.length > 0) {
-        // Delete in R21+
+        e.preventDefault();
+        // Remove all selected text objects from Zustand store
+        selectedObjects.forEach((obj) => {
+          if (obj.type === 'text') removeTextObject(obj.id);
+          // annotation/image deletion goes in R21
+        });
+        clearSelection();
       }
 
       // Tool shortcuts (only when not typing in an input)
@@ -230,13 +236,14 @@ interface PageCanvasProps {
 function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }: PageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { activeTool } = useToolStore();
+  const { textObjects, selectedObjects, selectObject, clearSelection, setDirty, reloadTrigger,
+    setTextObjects, addTextObject } = useDocumentStore();
+  const { activeTool, toolOptions } = useToolStore();
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const renderScale = zoom;
 
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
-  const { textObjects, selectedObjects, selectObject } = useDocumentStore();
 
   // Text objects for THIS page only
   const pageTextObjects = textObjects.filter((o) => o.pageIndex === pageIndex);
@@ -298,6 +305,41 @@ function PageCanvas({ page, pageIndex, isActive, onPageClick, onTextEdit, zoom }
         isActive ? "ring-2 ring-accent" : "ring-1 ring-border"
       )}
       style={{ width: pageWidth, height: pageHeight }}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        // If text tool active, create new text at click position
+        if (activeTool === 'text') {
+          e.preventDefault();
+          e.stopPropagation();
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          const newId = `text-${pageIndex}-${Date.now()}`;
+          addTextObject({
+            id: newId,
+            content: 'New Text',
+            pageIndex,
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+            width: 200,
+            height: 30,
+            fontSize: toolOptions.fontSize ?? 14,
+            fontFamily: toolOptions.fontFamily ?? 'DM Sans',
+            fontWeight: toolOptions.fontWeight ?? 'normal',
+            fontStyle: toolOptions.fontStyle ?? 'normal',
+            color: toolOptions.textColor ?? '#F0EDE8',
+            textAlign: toolOptions.textAlign ?? 'left',
+            rotation: 0,
+            objectRef: "new",
+          });
+          // Immediately enter editing mode
+          setEditingTextId(newId);
+          return;
+        }
+        // Select tool: deselect if clicking page background
+        if (activeTool === 'select') {
+          clearSelection();
+        }
+      }}
       onClick={(e) => { e.stopPropagation(); onPageClick(); }}
     >
       {/* pdf.js render canvas */}
