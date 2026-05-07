@@ -8,6 +8,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useToolStore } from "@/stores/toolStore";
 import { useHistoryStore } from "@/stores/historyStore";
 import { useFileHandler } from "@/hooks/useFileHandler";
+import { useAutosave } from "@/hooks/useAutosave";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { TopBar } from "@/components/layout/TopBar";
 import { LeftSidebar } from "@/components/layout/LeftSidebar";
@@ -37,6 +38,9 @@ export function EditorPage() {
   const { handleFile } = useFileHandler();
   const [hasFile, setHasFile] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+
+  // Autosave to IndexedDB whenever document is dirty
+  useAutosave();
 
   // Page element refs for scroll-into-view navigation
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
