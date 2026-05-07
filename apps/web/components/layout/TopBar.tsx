@@ -4,7 +4,7 @@ import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import {
   Sun, Moon, Download, Share2, Settings, PanelLeft, PanelRight,
-  Undo2, Redo2, FileText
+  Undo2, Redo2, FileText, Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDeviceType } from '@/hooks/useDeviceType';

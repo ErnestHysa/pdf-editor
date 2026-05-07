@@ -74,7 +74,7 @@ export class PdfObjectUtil {
    * Build a TJ array string from text content and font size.
    * This creates a PDF-compatible text array for the Tj operator.
    */
-  static build TjArray(text: string, fontSize: number, fontRef: string): string {
+  static buildTjArray(text: string, fontSize: number, fontRef: string): string {
     // Simplified: encode each character as a number offset
     const glyphWidths = text.split('').map(() => fontSize * 0.6); // approximate
     const arrayStr = glyphWidths.map(w => `(${Math.round(w)}`).join(' ') + '] Tj';
@@ -92,12 +92,11 @@ export class PdfObjectUtil {
    * Unescape a PDF literal string.
    */
   static unescapeString(s: string): string {
+    const escapeMap: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f' };
     return s
       .slice(1, -1)
-      .replace(/\\([nrtbf()\\])/g, (_, c) =>
-        ({ n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '(': '(', ')': ')', '\\': '\\' }[c] ?? c)
-      )
-      .replace(/\\([0-9]{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+      .replace(/\\([nrtbf()\\])/g, (_, c: string) => escapeMap[c] ?? c)
+      .replace(/\\([0-9]{3})/g, (_, oct: string) => String.fromCharCode(parseInt(oct, 8)))
       .replace(/\\r/g, '\r');
   }
 }

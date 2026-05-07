@@ -13,6 +13,8 @@ interface UIState {
   activePanel: 'pages' | 'properties' | 'comments';
   commandPaletteOpen: boolean;
   exportDialogOpen: boolean;
+  insertPageDialogOpen: boolean;
+  insertPageDialogMode: "blank" | "file";
   mobileBottomSheetOpen: boolean;
   mobileBottomSheetMode: 'pages' | 'properties' | 'tool-options';
 
@@ -27,6 +29,7 @@ interface UIState {
   setActivePanel: (panel: UIState['activePanel']) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setExportDialogOpen: (open: boolean) => void;
+  setInsertPageDialog: (open: boolean, mode?: UIState['insertPageDialogMode']) => void;
   setMobileBottomSheet: (open: boolean, mode?: UIState['mobileBottomSheetMode']) => void;
 }
 
@@ -40,6 +43,8 @@ export const useUIStore = create<UIState>()(
     activePanel: 'pages',
     commandPaletteOpen: false,
     exportDialogOpen: false,
+    insertPageDialogOpen: false,
+    insertPageDialogMode: 'blank',
     mobileBottomSheetOpen: false,
     mobileBottomSheetMode: 'pages',
 
@@ -103,6 +108,12 @@ export const useUIStore = create<UIState>()(
     setExportDialogOpen: (open) =>
       set((state) => {
         state.exportDialogOpen = open;
+      }),
+
+    setInsertPageDialog: (open, mode) =>
+      set((state) => {
+        state.insertPageDialogOpen = open;
+        if (mode) state.insertPageDialogMode = mode;
       }),
 
     setMobileBottomSheet: (open, mode) =>

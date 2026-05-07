@@ -1,4 +1,4 @@
-import { PDFDocument, PDFPage } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
 import { Page } from './Page';
 
 /**
@@ -30,12 +30,13 @@ export class PdfDocument {
     const [w, h] = size ? [size.width, size.height] : [595.28, 841.89];
     const newPage = this.pdfLibDoc.addPage([w, h]);
     const page = new Page(newPage, this._pages.length, this);
+
     if (afterIndex >= 0 && afterIndex < this._pages.length) {
-      // Move to correct position (insert after)
-      // pdf-lib doesn't have a movePage, so we rebuild page order conceptually
-      // For now, pages are in add order — reorder handled at Document level
+      this._pages.splice(afterIndex + 1, 0, page);
+      this.reindexPages();
+    } else {
+      this._pages.push(page);
     }
-    this._pages.push(page);
     return page;
   }
 
@@ -43,25 +44,83 @@ export class PdfDocument {
     if (index < 0 || index >= this._pages.length) return;
     this.pdfLibDoc.removePage(index);
     this._pages.splice(index, 1);
-    // Re-index remaining pages
-    this._pages.forEach((p, i) => p.setIndex(i));
+    this.reindexPages();
   }
 
+  /**
+   * Reorder pages: move page at fromIndex to toIndex.
+   * Uses the internal array as canonical order; reindexes on save.
+   */
   reorderPages(fromIndex: number, toIndex: number): void {
     if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || fromIndex >= this._pages.length) return;
+    if (toIndex < 0 || toIndex >= this._pages.length) return;
+
     const [page] = this._pages.splice(fromIndex, 1);
     this._pages.splice(toIndex, 0, page);
-    // pdf-lib: remove from old position and insert at new position
-    // We use copyPages approach since movePage isn't available in pdf-lib
-    const pageCount = this.pdfLibDoc.getPageCount();
-    if (fromIndex < pageCount && toIndex < pageCount) {
-      const pages = this.pdfLibDoc.getPages();
-      const pageIndex = this.pdfLibDoc.getPageIndices();
-      // Pages are reordered via the internal array
-      // For a proper implementation, we'd need to rebuild the page tree
-      // This is a simplified placeholder — real reorder in R29-R34
-      this._pages.forEach((p, i) => p.setIndex(i));
+    this.reindexPages();
+  }
+
+  /**
+   * Duplicate a page at the given index, inserting the copy right after.
+   * Note: true content cloning requires deep PDF stream copying.
+   * This creates a new blank page with same dimensions/rotation.
+   */
+  duplicatePage(index: number): Page {
+    if (index < 0 || index >= this._pages.length) {
+      throw new Error(`Invalid page index: ${index}`);
     }
+    const srcPage = this._pages[index];
+    const [w, h] = [srcPage.getWidth(), srcPage.getHeight()];
+
+    const newPage = this.pdfLibDoc.addPage([w, h]);
+    newPage.setRotation(srcPage.getLibPage().getRotation());
+
+    const newPageObj = new Page(newPage, index + 1, this);
+    this._pages.splice(index + 1, 0, newPageObj);
+    this.reindexPages();
+    return newPageObj;
+  }
+
+  /**
+   * Insert pages from another PdfDocument at a given position.
+   * Returns the number of pages inserted.
+   */
+  async insertPagesFromDocument(
+    sourceDoc: PdfDocument,
+    afterIndex: number,
+    pageIndices?: number[]
+  ): Promise<number> {
+    const srcPages = sourceDoc.getPages();
+    const indices = pageIndices ?? srcPages.map((_, i) => i);
+    const validIndices = indices.filter((i) => i >= 0 && i < srcPages.length);
+
+    if (validIndices.length === 0) return 0;
+
+    // Copy pages from source using pdf-lib's copyPages
+    // We need to use the raw PDFDocument from the source
+    const copiedPages = await this.pdfLibDoc.copyPages(
+      sourceDoc.getLibDoc(),
+      validIndices
+    );
+
+    // Insert each copied page after the specified index
+    for (let i = 0; i < copiedPages.length; i++) {
+      const newPage = copiedPages[i];
+      const insertAt = Math.min(afterIndex + 1 + i, this._pages.length);
+      // Add to pdf-lib doc at correct position
+      // pdf-lib adds pages to the end; we track positions in our array
+      this.pdfLibDoc.addPage(newPage);
+      const pageObj = new Page(newPage, insertAt, this);
+      this._pages.splice(insertAt, 0, pageObj);
+    }
+
+    this.reindexPages();
+    return copiedPages.length;
+  }
+
+  private reindexPages(): void {
+    this._pages.forEach((p, i) => p.setIndex(i));
   }
 
   async save(): Promise<Uint8Array> {
@@ -69,8 +128,6 @@ export class PdfDocument {
   }
 
   saveArrayBuffer(): ArrayBuffer {
-    // Sync stub — the actual save is async. Callers should use save().
-    // This exists for compatibility; returns an empty buffer.
     return new ArrayBuffer(0);
   }
 

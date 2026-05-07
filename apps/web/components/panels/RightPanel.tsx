@@ -1,4 +1,5 @@
 "use client";
+import { useState, useCallback, useEffect } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { useDocumentStore, type SerializableTextObject } from '@/stores/documentStore';
 import { useToolStore, ToolOptions } from "@/stores/toolStore";
@@ -76,18 +77,86 @@ export function RightPanel({ open }: RightPanelProps) {
 }
 
 function PagePropertiesPanel({ page, onRotateDone }: { page: any; onRotateDone: () => void }) {
+  const { pdfDocument, setDirty, forceReload } = useDocumentStore();
+  const [width, setWidth] = useState(Math.round(page.getWidth?.() ?? 0));
+  const [height, setHeight] = useState(Math.round(page.getHeight?.() ?? 0));
+  const [rotation, setRotation] = useState(page.getRotation?.() ?? 0);
+
+  // Sync with page changes
+  useEffect(() => {
+    setWidth(Math.round(page.getWidth?.() ?? 0));
+    setHeight(Math.round(page.getHeight?.() ?? 0));
+    setRotation(page.getRotation?.() ?? 0);
+  }, [page]);
+
+  const handleResize = useCallback(() => {
+    if (!page) return;
+    const w = Math.max(72, Math.min(width, 14400));
+    const h = Math.max(72, Math.min(height, 14400));
+    page.setSize?.(w, h);
+    setDirty(true);
+    onRotateDone();
+  }, [page, width, height, setDirty, onRotateDone]);
+
+  const handleRotate = useCallback((deg: number) => {
+    if (!page) return;
+    page.setRotation?.(deg);
+    setRotation(deg);
+    setDirty(true);
+    onRotateDone();
+  }, [page, setDirty, onRotateDone]);
+
   return (
     <div className="space-y-4">
       <PropertySection title="Size">
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-2xs text-text-tertiary uppercase tracking-wider block mb-1">Width</label>
-            <div className="text-sm font-mono text-text-primary">{Math.round(page.getWidth?.() ?? 0)} pt</div>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={width}
+                onChange={(e) => setWidth(Number(e.target.value))}
+                onBlur={handleResize}
+                onKeyDown={(e) => e.key === "Enter" && handleResize()}
+                className="w-full bg-bg-elevated border border-border rounded px-2 py-1 text-sm font-mono text-text-primary"
+                min={72} max={14400}
+              />
+              <span className="text-2xs text-text-tertiary">pt</span>
+            </div>
           </div>
           <div>
             <label className="text-2xs text-text-tertiary uppercase tracking-wider block mb-1">Height</label>
-            <div className="text-sm font-mono text-text-primary">{Math.round(page.getHeight?.() ?? 0)} pt</div>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={height}
+                onChange={(e) => setHeight(Number(e.target.value))}
+                onBlur={handleResize}
+                onKeyDown={(e) => e.key === "Enter" && handleResize()}
+                className="w-full bg-bg-elevated border border-border rounded px-2 py-1 text-sm font-mono text-text-primary"
+                min={72} max={14400}
+              />
+              <span className="text-2xs text-text-tertiary">pt</span>
+            </div>
           </div>
+        </div>
+        {/* Quick size presets */}
+        <div className="grid grid-cols-2 gap-1 mt-2">
+          {(["A4", "Letter", "Legal", "A5"] as const).map((size) => (
+            <button
+              key={size}
+              onClick={() => {
+                const dims = { A4: [595.28, 841.89], Letter: [612, 792], Legal: [612, 1008], A5: [420.94, 595.28] }[size];
+                setWidth(Math.round(dims[0]));
+                setHeight(Math.round(dims[1]));
+                if (page) { page.setSize?.(dims[0], dims[1]); setDirty(true); onRotateDone(); }
+              }}
+              className="px-2 py-1 text-2xs rounded border border-border hover:border-accent hover:text-accent transition-colors text-text-secondary"
+            >
+              {size}
+            </button>
+          ))}
         </div>
       </PropertySection>
 
@@ -96,8 +165,13 @@ function PagePropertiesPanel({ page, onRotateDone }: { page: any; onRotateDone: 
           {[0, 90, 180, 270].map((deg) => (
             <button
               key={deg}
-              onClick={() => { page.setRotation?.(deg); onRotateDone(); }}
-              className="flex-1 py-1 text-xs rounded border border-border hover:border-accent hover:text-accent transition-colors"
+              onClick={() => handleRotate(deg)}
+              className={cn(
+                "flex-1 py-1 text-xs rounded border transition-colors",
+                rotation === deg
+                  ? "border-accent text-accent bg-accent/10"
+                  : "border-border hover:border-accent hover:text-accent text-text-secondary"
+              )}
             >
               {deg}&deg;
             </button>
