@@ -81,10 +81,11 @@ export function EditorPage() {
     const pageEl = pageRefs.current[activePageIndex];
     if (!pageEl) return;
     const rect = pageEl.getBoundingClientRect();
-    const screenX = canvasX * zoom + rect.left;
-    const screenY = canvasY * zoom + rect.top;
+    // Account for zoom, pan offset, and page position in screen coords
+    const screenX = canvasX * zoom + rect.left + panOffset.x;
+    const screenY = canvasY * zoom + rect.top + panOffset.y;
     setContextMenu({ x: screenX, y: screenY });
-  }, [zoom, activePageIndex]);
+  }, [zoom, activePageIndex, panOffset]);
 
   // Stable handlers object to avoid effect re-runs on every render
   // eslint-disable-next-line react-hooks/exhaustive-deps

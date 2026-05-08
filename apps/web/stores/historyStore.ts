@@ -172,6 +172,12 @@ case 'annotation-update':
           store.cropPage(data.pageIndex, data.previousCropBox);
         }
         break;
+      case 'page-add':
+        // Undo add = delete the page that was added at pageIndex
+        if (data.pageIndex !== undefined) {
+          store.deletePage(data.pageIndex);
+        }
+        break;
       case 'form-field-update':
         if (data.targetIds[0] && data.previousValue !== undefined) {
           store.updateFormFieldValue(data.targetIds[0], data.previousValue);

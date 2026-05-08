@@ -404,8 +404,7 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
     }
 
     // Draw all image objects on this page
-    const pageImages = imageObjects.filter((img: any) => img.pageIndex === pageIndex);
-    for (const imgObj of pageImages) {
+    for (const imgObj of imageObjects) {
       if (imgObj.src) {
         try {
           const imgBytes = await fetch(imgObj.src).then(r => r.arrayBuffer());

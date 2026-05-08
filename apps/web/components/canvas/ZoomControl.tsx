@@ -7,7 +7,7 @@ import { ZoomIn, ZoomOut, Maximize2, Minimize2, ArrowLeftRight } from 'lucide-re
 
 export function ZoomControl() {
   const { zoom, setZoom, zoomIn, zoomOut } = useUIStore();
-  const { pdfDocument } = useDocumentStore();
+  const { pdfDocument, activePageIndex } = useDocumentStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
@@ -29,7 +29,7 @@ export function ZoomControl() {
   }, []);
 
   const pages = pdfDocument?.getPages() ?? [];
-  const activePage = pages[0]; // use first page for fit calculations
+  const activePage = pages[activePageIndex ?? 0];
   const pageWidth = activePage?.getWidth() ?? 612;
   const pageHeight = activePage?.getHeight() ?? 792;
 

@@ -85,6 +85,7 @@ export const PageCanvas = memo(function PageCanvas({
   const { panOffset } = useUIStore();
 
   const drawingPointsRef = useRef<Array<{ x: number; y: number }>>([]);
+  const cancelledRef = useRef(false);
   const renderScale = zoom;
 
   // ── Viewport culling: compute visible rect from scroll container ─
@@ -184,6 +185,7 @@ export const PageCanvas = memo(function PageCanvas({
 
   // ── Draw freehand strokes when annotations change ─────────────────
   useEffect(() => {
+    cancelledRef.current = false;
     const canvas = drawCanvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
@@ -195,12 +197,15 @@ export const PageCanvas = memo(function PageCanvas({
     for (const ann of drawingAnnotations) {
       const img = new Image();
       img.onload = () => {
-        if (!drawCanvasCtxRef.current) return;  // component unmounted
+        if (cancelledRef.current || !drawCanvasCtxRef.current) return;
         drawCanvasCtxRef.current.drawImage(img, ann.x * renderScale, ann.y * renderScale,
           ann.width * renderScale, ann.height * renderScale);
       };
       img.src = (ann as any).imageData ?? '';
     }
+    return () => {
+      cancelledRef.current = true;
+    };
   }, [annotations, pageIndex, renderScale]);
 
   // ── Coordinate helpers ───────────────────────────────────────────
