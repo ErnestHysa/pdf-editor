@@ -143,9 +143,9 @@ interface DocumentState {
   selectedObjects: SelectedObject[];
   activePageIndex: number;
   reloadTrigger: number; // incremented to force full pdf.js reload (all pages)
-  // Targeted reload tracking — which pages need canvas re-render after pdf-lib edits
-  pendingEdits: Array<{ pageIndex: number; reason: 'page-change' | 'image-insert' }>;
-  pendingPageReload: number; // incremented to trigger re-render of marked pages only
+  // Per-page targeted reload: pageIndex → timestamp (epoch ms)
+  // When a page is edited, set the timestamp; when it changes, re-render only that page
+  targetedReloads: Record<number, number>;
   clipboard: SerializableTextObject[]; // copied text objects for paste
   annotations: AnnotationObject[]; // R35-R42 annotation objects
 
@@ -162,6 +162,7 @@ interface DocumentState {
   duplicateSelected: () => void;
   setActivePage: (index: number) => void;
   forceReload: () => void;
+  addPartialReload: (pageIndex: number) => void;
   setTextObjects: (objects: SerializableTextObject[]) => void;
   addTextObject: (obj: SerializableTextObject) => void;
   removeTextObject: (id: string) => void;
@@ -218,8 +219,7 @@ const initialState = {
   selectedObjects: [],
   activePageIndex: 0,
   reloadTrigger: 0,
-  pendingEdits: [],
-  pendingPageReload: 0,
+  targetedReloads: {},
   textObjects: [],
   imageObjects: [],
   clipboard: [],
@@ -271,6 +271,11 @@ export const useDocumentStore = create<DocumentState>()(
       set((state) => {
         state.reloadTrigger = state.reloadTrigger + 1;
         state.pdfJsDoc = null;
+        state.targetedReloads = {};
+      }),
+    addPartialReload: (pageIndex) =>
+      set((state) => {
+        state.targetedReloads[pageIndex] = Date.now();
       }),
     setTextObjects: (objects) =>
       set((state) => {
@@ -392,7 +397,7 @@ export const useDocumentStore = create<DocumentState>()(
       page.setRotation(newRotation);
       set((state) => {
         state.isDirty = true;
-        state.reloadTrigger += 1;
+        state.targetedReloads[index] = Date.now();
       });
     },
 

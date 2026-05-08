@@ -72,7 +72,15 @@ export const PageCanvas = memo(function PageCanvas({
   const pageSelected = selectedObjects.filter((o) => o.pageIndex === pageIndex);
 
   // ── pdf.js canvas rendering ──────────────────────────────────────
-  const { pdfJsDoc } = useDocumentStore();
+  const { pdfJsDoc, targetedReloads } = useDocumentStore();
+  const [pageReloadKey, setPageReloadKey] = useState(0);
+
+  // Re-render this specific page when targetedReloads[pageIndex] changes
+  useEffect(() => {
+    const ts = targetedReloads[pageIndex];
+    if (ts) setPageReloadKey((k) => k + 1);
+  }, [targetedReloads, pageIndex]);
+
   useEffect(() => {
     if (!canvasRef.current || !pdfJsDoc) return;
     let cancelled = false;
@@ -87,7 +95,9 @@ export const PageCanvas = memo(function PageCanvas({
       await pdfPage.render({ canvasContext: ctx, viewport }).promise;
     })();
     return () => { cancelled = true; };
-  }, [pdfJsDoc, pageIndex, renderScale]);
+    // pageReloadKey is intentionally omitted — we re-render via targetedReloads effect above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfJsDoc, pageIndex, renderScale, pageReloadKey]);
 
   // ── Drawing canvas overlay setup ─────────────────────────────────
   useEffect(() => {
