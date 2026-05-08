@@ -75,6 +75,9 @@ export function ZustandAnnotationView({
       <div
         className="w-full h-full p-2 rounded shadow text-xs overflow-hidden"
         style={{ backgroundColor: annotation.color, color: '#92400e' }}
+        role="button"
+        aria-label={`Sticky note: ${annotation.content || 'empty'}. Double-click to edit.`}
+        tabIndex={0}
       >
         {annotation.content || 'Double-click to edit'}
       </div>
@@ -141,6 +144,16 @@ export function ZustandAnnotationView({
                 <div style={{ color: 'var(--text-primary)' }}>{annotation.content || 'No comment'}</div>
                 <div className="text-2xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
                   {annotation.timestamp ? new Date(annotation.timestamp).toLocaleString() : ''}
+                </div>
+                <div className="flex gap-1 mt-2">
+                  <button
+                    className="px-2 py-0.5 text-2xs rounded border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                    onClick={onCommentPopoverClose}
+                    aria-label="Close comment"
+                  >
+                    Close
+                  </button>
                 </div>
               </>
             )}

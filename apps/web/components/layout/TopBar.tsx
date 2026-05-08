@@ -61,6 +61,7 @@ export function TopBar() {
           onClick={toggleLeftSidebar}
           className="p-1.5 rounded-sm hover:bg-bg-hover text-text-secondary transition-colors"
           title="Toggle sidebar"
+          aria-label="Toggle left sidebar"
         >
           <PanelLeft size={16} />
         </button>
@@ -104,6 +105,7 @@ export function TopBar() {
                 canUndo() ? 'hover:bg-bg-hover text-text-primary' : 'text-text-tertiary'
               )}
               title="Undo (Ctrl+Z)"
+              aria-label="Undo"
             >
               <Undo2 size={14} />
             </button>
@@ -120,6 +122,7 @@ export function TopBar() {
                 canRedo() ? 'hover:bg-bg-hover text-text-primary' : 'text-text-tertiary'
               )}
               title="Redo (Ctrl+Shift+Z)"
+              aria-label="Redo"
             >
               <Redo2 size={14} />
             </button>
@@ -146,6 +149,7 @@ export function TopBar() {
               <button
                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+                aria-label="Export document"
               >
                 <Download size={14} />
                 {deviceType !== 'mobile' && 'Export'}
@@ -208,6 +212,8 @@ export function TopBar() {
           onClick={toggleTheme}
           className="p-1.5 rounded-sm hover:bg-bg-hover text-text-secondary transition-colors"
           title="Toggle theme"
+          aria-label="Toggle theme"
+          aria-pressed={theme === 'dark'}
         >
           {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
         </button>
@@ -216,6 +222,7 @@ export function TopBar() {
           onClick={toggleRightPanel}
           className="p-1.5 rounded-sm hover:bg-bg-hover text-text-secondary transition-colors"
           title="Toggle properties panel"
+          aria-label="Toggle right sidebar"
         >
           <PanelRight size={16} />
         </button>

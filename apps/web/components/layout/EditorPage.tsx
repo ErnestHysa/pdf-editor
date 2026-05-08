@@ -290,6 +290,10 @@ export function EditorPage() {
         <div
           className="flex-1 overflow-auto bg-bg-base relative"
           style={{ touchAction: 'none' }}
+          role="application"
+          aria-label="PDF canvas editing area"
+          aria-describedby="canvas-instructions"
+          tabIndex={0}
           onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); }}
           onClick={(e) => {
             if ((e.target as HTMLElement).classList.contains('canvas-scroll-root')) {
@@ -322,6 +326,10 @@ export function EditorPage() {
             lastPinchDistance.current = null;
           }}
         >
+          {/* Screen reader instructions */}
+          <div id="canvas-instructions" className="sr-only">
+            Use arrow keys to navigate pages. Press 1-9 to jump to page. Press Delete to remove selected objects.
+          </div>
           {/* Pages wrapper with zoom/pan transform */}
           <div
             className="canvas-scroll-root pt-8 pb-24 px-8"

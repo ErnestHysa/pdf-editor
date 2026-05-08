@@ -29,7 +29,7 @@ export function RightPanel({ open }: RightPanelProps) {
     : undefined;
 
   return (
-    <aside className="w-[280px] shrink-0 bg-bg-surface border-l border-border flex flex-col overflow-hidden animate-slide-in">
+    <aside className="w-[280px] shrink-0 bg-bg-surface border-l border-border flex flex-col overflow-hidden animate-slide-in" role="complementary" aria-label="Properties panel">
       {/* Header */}
       <div className="h-10 flex items-center justify-between px-4 border-b border-border shrink-0">
         <span className="text-xs font-medium text-text-secondary uppercase tracking-wider">
@@ -38,6 +38,7 @@ export function RightPanel({ open }: RightPanelProps) {
         <button
           onClick={toggleRightPanel}
           className="p-1 rounded hover:bg-bg-hover text-text-tertiary"
+          aria-label="Close panel"
         >
           <X size={14} />
         </button>
@@ -432,6 +433,7 @@ function AnnotationPropertiesPanel({ toolOptions, setToolOption }: { toolOptions
                 backgroundColor: c,
                 borderColor: toolOptions.color === c ? "white" : "transparent",
               }}
+              aria-label={`Select color ${c}`}
             />
           ))}
           <input

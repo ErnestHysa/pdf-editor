@@ -8,11 +8,12 @@ export function ZoomControl() {
   const pct = Math.round(zoom * 100);
 
   return (
-    <div className="absolute bottom-6 right-6 flex items-center gap-1 undo-pill px-3 py-1.5 rounded-full z-10">
+    <div className="absolute bottom-6 right-6 flex items-center gap-1 undo-pill px-3 py-1.5 rounded-full z-10" role="group" aria-label="Zoom controls">
       <button
         onClick={zoomOut}
         className="p-1 hover:bg-bg-hover rounded transition-colors text-text-secondary"
         title="Zoom out"
+        aria-label="Zoom out"
       >
         <ZoomOut size={14} />
       </button>
@@ -21,6 +22,7 @@ export function ZoomControl() {
         onClick={() => setZoom(1.0)}
         className="px-2 text-xs font-mono text-text-secondary hover:text-text-primary transition-colors min-w-[44px] text-center"
         title="Reset to 100%"
+        aria-label="Reset zoom to 100%"
       >
         {pct}%
       </button>
@@ -29,6 +31,7 @@ export function ZoomControl() {
         onClick={zoomIn}
         className="p-1 hover:bg-bg-hover rounded transition-colors text-text-secondary"
         title="Zoom in"
+        aria-label="Zoom in"
       >
         <ZoomIn size={14} />
       </button>
@@ -39,6 +42,7 @@ export function ZoomControl() {
         onClick={() => setZoom(1.0)}
         className="p-1 hover:bg-bg-hover rounded transition-colors text-text-secondary"
         title="Fit width"
+        aria-label="Fit to width"
       >
         <Maximize2 size={13} />
       </button>
