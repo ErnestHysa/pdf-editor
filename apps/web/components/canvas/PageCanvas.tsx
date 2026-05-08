@@ -266,6 +266,37 @@ export const PageCanvas = memo(function PageCanvas({
       return;
     }
 
+    if (activeTool === 'signature') {
+      const { pendingSignature } = useDocumentStore.getState();
+      if (pendingSignature) {
+        const { dataUrl, width, height } = pendingSignature;
+        const id = `sig-${Date.now()}`;
+        // Scale signature to a reasonable display width (max 200pt wide)
+        const maxWidth = 200;
+        const scale = width > maxWidth ? maxWidth / width : 1;
+        const displayWidth = width * scale;
+        const displayHeight = height * scale;
+        const newObj = {
+          id, pageIndex,
+          x: pos.x - displayWidth / 2,
+          y: pos.y - displayHeight / 2,
+          width: displayWidth, height: displayHeight,
+          src: dataUrl, opacity: 1, rotation: 0,
+        };
+        useHistoryStore.getState().push({
+          label: 'Add signature', description: 'Add signature',
+          targetIds: [id],
+          undo: () => useDocumentStore.getState().removeImageObject(id),
+          redo: () => useDocumentStore.getState().addImageObject(newObj),
+        });
+        addImageObject(newObj);
+        useDocumentStore.getState().setPendingSignature(null);
+        useToolStore.getState().setTool('select');
+        setDirty(true);
+      }
+      return;
+    }
+
     if (['rectangle', 'ellipse', 'line', 'arrow'].includes(activeTool)) {
       setShapePreview({ x: pos.x, y: pos.y, width: 0, height: 0 });
     }

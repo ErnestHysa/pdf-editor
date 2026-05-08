@@ -30,6 +30,7 @@ export const TOOLS = [
   { id: 'comment', label: 'Comment', shortcut: 'C', icon: 'MessageSquare' },
   { id: 'draw', label: 'Freehand Draw', shortcut: 'D', icon: 'Pencil' },
   { id: 'image', label: 'Image', shortcut: 'I', icon: 'Image' },
+  { id: 'signature', label: 'Signature', shortcut: 'G', icon: 'Pen' },
 ] as const;
 
 export type ToolId = typeof TOOLS[number]['id'];

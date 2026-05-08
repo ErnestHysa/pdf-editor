@@ -206,6 +206,7 @@ export function EditorPage() {
         case 'C': setTool('comment'); break;
         case 'D': setTool('draw'); break;
         case 'I': setTool('image'); break;
+        case 'G': setTool('signature'); break;
                       }
     };
     window.addEventListener('keydown', handler);

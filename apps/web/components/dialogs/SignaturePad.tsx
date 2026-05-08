@@ -4,17 +4,21 @@ import { X, Trash2, Upload, Pen, Type, Image } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SignaturePadProps {
+  open: boolean;
   onClose: () => void;
-  onSave: (dataUrl: string) => void;
+  onSave: (dataUrl: string, width: number, height: number) => void;
 }
 
 type Tab = "draw" | "type" | "upload";
 
-export function SignaturePad({ onClose, onSave }: SignaturePadProps) {
+export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
+  if (!open) return null;
+
   const [activeTab, setActiveTab] = useState<Tab>("draw");
   const [typedText, setTypedText] = useState("");
   const [fontSize, setFontSize] = useState(48);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
@@ -108,38 +112,48 @@ export function SignaturePad({ onClose, onSave }: SignaturePadProps) {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleSave = useCallback(() => {
-    // Build data URL based on active tab
-    if (activeTab === "draw") {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const dataUrl = canvas.toDataURL("image/png");
-      onSave(dataUrl);
-    } else if (activeTab === "type") {
-      // Render typed text to canvas
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+  const handleSave = useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      // Build data URL based on active tab
+      if (activeTab === "draw") {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const dataUrl = canvas.toDataURL("image/png");
+        onSave(dataUrl, canvas.width / 2, canvas.height / 2);
+      } else if (activeTab === "type") {
+        // Render typed text to canvas
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
 
-      canvas.width = 400;
-      canvas.height = 150;
+        canvas.width = 400;
+        canvas.height = 150;
 
-      ctx.fillStyle = "transparent";
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "transparent";
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      ctx.fillStyle = "#F0EDE8";
-      ctx.font = `${fontSize}px "Brush Script MT", "Segoe Script", cursive, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(typedText || "Your Signature", canvas.width / 2, canvas.height / 2);
+        ctx.fillStyle = "#F0EDE8";
+        ctx.font = `${fontSize}px "Brush Script MT", "Segoe Script", cursive, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(typedText || "Your Signature", canvas.width / 2, canvas.height / 2);
 
-      onSave(canvas.toDataURL("image/png"));
-    } else if (activeTab === "upload") {
-      if (uploadedPreview) {
-        onSave(uploadedPreview);
+        onSave(canvas.toDataURL("image/png"), canvas.width, canvas.height);
+      } else if (activeTab === "upload") {
+        if (uploadedPreview) {
+          // Get natural dimensions synchronously using createImageBitmap
+          const blob = await fetch(uploadedPreview).then((r) => r.blob());
+          const bitmap = await createImageBitmap(blob);
+          onSave(uploadedPreview, bitmap.width, bitmap.height);
+          bitmap.close();
+        }
       }
+    } finally {
+      setIsSaving(false);
     }
-  }, [activeTab, typedText, fontSize, uploadedPreview, onSave]);
+  }, [activeTab, typedText, fontSize, uploadedPreview, onSave, isSaving]);
 
   const tabs: { id: Tab; label: string; icon: typeof Pen }[] = [
     { id: "draw", label: "Draw", icon: Pen },
@@ -305,20 +319,20 @@ export function SignaturePad({ onClose, onSave }: SignaturePadProps) {
           <button
             onClick={handleSave}
             disabled={
-              (activeTab === "draw") ||
+              isSaving ||
               (activeTab === "type" && !typedText) ||
               (activeTab === "upload" && !uploadedPreview)
             }
             className={cn(
               "px-4 py-2 text-sm bg-accent text-white rounded-lg font-medium transition-colors flex items-center gap-1.5",
-              (activeTab === "draw") ||
+              isSaving ||
               (activeTab === "type" && !typedText) ||
               (activeTab === "upload" && !uploadedPreview)
                 ? "opacity-50 cursor-not-allowed"
                 : "hover:bg-accent-hover"
             )}
           >
-            Save Signature
+            {isSaving ? "Saving…" : "Save Signature"}
           </button>
         </div>
       </div>

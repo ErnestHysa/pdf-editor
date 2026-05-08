@@ -2,9 +2,11 @@
 import { useState, useCallback } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { useDocumentStore } from "@/stores/documentStore";
+import { useToolStore } from "@/stores/toolStore";
 import { SortableThumbnails } from "@/components/canvas/SortableThumbnails";
 import { InsertPageDialog } from "@/components/dialogs/InsertPageDialog";
-import { Plus, Trash2, Copy, FileUp, MoreHorizontal } from "lucide-react";
+import { SignaturePad } from "@/components/dialogs/SignaturePad";
+import { Plus, Trash2, Copy, FileUp, MoreHorizontal, Pen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LeftSidebarProps {
@@ -20,6 +22,7 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
   const [insertDialogMode, setInsertDialogMode] = useState<"blank" | "file">("blank");
   const [contextMenuPageIndex, setContextMenuPageIndex] = useState<number | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [signaturePadOpen, setSignaturePadOpen] = useState(false);
 
   const handleAddPage = useCallback(() => {
     setInsertDialogMode("blank");
@@ -197,12 +200,36 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
         )}
       </div>
 
+      {/* Sign button — always visible when document is loaded */}
+      {pdfDocument && (
+        <div className="shrink-0 border-t border-border p-3">
+          <button
+            onClick={() => setSignaturePadOpen(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+          >
+            <Pen size={14} />
+            Sign Document
+          </button>
+        </div>
+      )}
+
       {/* Insert page dialog */}
       <InsertPageDialog
         open={insertDialogOpen}
         onClose={() => setInsertDialogOpen(false)}
         mode={insertDialogMode}
         insertAfterIndex={activePageIndex}
+      />
+
+      {/* Signature pad dialog */}
+      <SignaturePad
+        open={signaturePadOpen}
+        onClose={() => setSignaturePadOpen(false)}
+        onSave={(dataUrl, width, height) => {
+          useDocumentStore.getState().setPendingSignature({ dataUrl, width, height });
+          useToolStore.getState().setTool('signature');
+          setSignaturePadOpen(false);
+        }}
       />
     </aside>
   );

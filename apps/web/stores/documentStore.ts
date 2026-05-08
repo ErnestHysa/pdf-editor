@@ -169,6 +169,9 @@ interface DocumentState {
   formFieldValues: Record<string, string | boolean>; // field name -> modified value
   updateFormFieldValue: (fieldName: string, value: string | boolean) => void;
   resetFormFieldValues: () => void;
+  // Pending signature (R66)
+  pendingSignature: { dataUrl: string; width: number; height: number } | null;
+  setPendingSignature: (sig: { dataUrl: string; width: number; height: number } | null) => void;
 }
 
 const initialState = {
@@ -186,6 +189,7 @@ const initialState = {
   clipboard: [],
   annotations: [],
   formFieldValues: {},
+  pendingSignature: null,
 };
 
 export const useDocumentStore = create<DocumentState>()(
@@ -419,6 +423,10 @@ export const useDocumentStore = create<DocumentState>()(
     resetFormFieldValues: () =>
       set((state) => {
         state.formFieldValues = {};
+      }),
+    setPendingSignature: (sig) =>
+      set((state) => {
+        state.pendingSignature = sig;
       }),
     copySelected: () =>
       set((state) => {
