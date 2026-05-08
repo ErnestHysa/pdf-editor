@@ -105,7 +105,22 @@ export interface SerializableImageObject {
   rotation: number;
   src: string; // base64 data URL
   opacity: number;
+  objectRef?: string; // optional — image objects are user-added, not parsed from PDF
 }
+
+// Shape for construction — objectRef defaults to '' for user-added images
+export type ImageObjectInput = {
+  id: string;
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  src: string;
+  opacity?: number;
+  objectRef?: string;
+};
 
 export interface SelectedObject {
   id: string;
@@ -156,13 +171,15 @@ interface DocumentState {
   deletePage: (index: number) => void;
   duplicatePage: (index: number) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
+  rotatePage: (index: number, direction: "left" | "right") => void;
+  cropPage: (index: number) => void;
   insertPagesFromFile: (file: File, afterIndex: number) => Promise<number>;
   // Annotation management (R35-R42)
   addAnnotation: (annotation: AnnotationObject) => void;
   removeAnnotation: (id: string) => void;
   updateAnnotation: (id: string, updates: Partial<AnnotationObject>) => void;
   // Image management (R43-R47)
-  addImageObject: (obj: SerializableImageObject) => void;
+  addImageObject: (obj: ImageObjectInput) => void;
   removeImageObject: (id: string) => void;
   updateImageObject: (id: string, updates: Partial<SerializableImageObject>) => void;
   // Form field management (R65)
@@ -172,6 +189,20 @@ interface DocumentState {
   // Pending signature (R66)
   pendingSignature: { dataUrl: string; width: number; height: number } | null;
   setPendingSignature: (sig: { dataUrl: string; width: number; height: number } | null) => void;
+  // Search state (B3)
+  searchQuery: string;
+  searchActiveMatches: Array<{
+    textObjectId: string;
+    pageIndex: number;
+    matchStart: number;
+    matchEnd: number;
+    matchText: string;
+  }>;
+  searchCurrentMatchIndex: number;
+  setSearchQuery: (query: string) => void;
+  setSearchActiveMatches: (matches: DocumentState['searchActiveMatches']) => void;
+  setSearchCurrentMatchIndex: (index: number) => void;
+  clearSearch: () => void;
 }
 
 const initialState = {
@@ -190,6 +221,9 @@ const initialState = {
   annotations: [],
   formFieldValues: {},
   pendingSignature: null,
+  searchQuery: '',
+  searchActiveMatches: [],
+  searchCurrentMatchIndex: 0,
 };
 
 export const useDocumentStore = create<DocumentState>()(
@@ -342,6 +376,34 @@ export const useDocumentStore = create<DocumentState>()(
       });
     },
 
+    rotatePage: (index, direction) => {
+      const doc = useDocumentStore.getState().pdfDocument;
+      if (!doc) return;
+      const page = doc.getPage(index);
+      if (!page) return;
+      const currentRotation = page.getRotation();
+      const delta = direction === "left" ? -90 : 90;
+      const newRotation = (currentRotation + delta + 360) % 360;
+      page.setRotation(newRotation);
+      set((state) => {
+        state.isDirty = true;
+        state.reloadTrigger += 1;
+      });
+    },
+
+    cropPage: (index) => {
+      const doc = useDocumentStore.getState().pdfDocument;
+      if (!doc) return;
+      // Crop functionality: reset bounding box to current page size (no-op placeholder)
+      // Actual crop UI would be implemented separately with interactive selection
+      const page = doc.getPage(index);
+      if (!page) return;
+      set((state) => {
+        state.isDirty = true;
+        state.reloadTrigger += 1;
+      });
+    },
+
     insertPagesFromFile: async (file, afterIndex) => {
       const { PDFDocument } = await import('pdf-lib');
       const buffer = await file.arrayBuffer();
@@ -397,7 +459,7 @@ export const useDocumentStore = create<DocumentState>()(
     // ── Image management (R43-R47) ────────────────────────────────
     addImageObject: (obj) =>
       set((state) => {
-        state.imageObjects.push(obj);
+        state.imageObjects.push({ ...obj, opacity: obj.opacity ?? 1 });
         state.isDirty = true;
       }),
     removeImageObject: (id) =>
@@ -466,6 +528,25 @@ export const useDocumentStore = create<DocumentState>()(
           state.selectedObjects.push({ id: obj.id, type: 'text', pageIndex: obj.pageIndex });
         });
         state.isDirty = true;
+      }),
+    // ── Search state (B3) ──────────────────────────────────────────
+    setSearchQuery: (query) =>
+      set((state) => {
+        state.searchQuery = query;
+      }),
+    setSearchActiveMatches: (matches) =>
+      set((state) => {
+        state.searchActiveMatches = matches;
+      }),
+    setSearchCurrentMatchIndex: (index) =>
+      set((state) => {
+        state.searchCurrentMatchIndex = index;
+      }),
+    clearSearch: () =>
+      set((state) => {
+        state.searchQuery = '';
+        state.searchActiveMatches = [];
+        state.searchCurrentMatchIndex = 0;
       }),
   }))
 );

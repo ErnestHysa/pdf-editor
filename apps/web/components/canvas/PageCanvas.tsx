@@ -42,6 +42,7 @@ export const PageCanvas = memo(function PageCanvas({
     textObjects, selectedObjects, selectObject, clearSelection,
     setDirty, annotations, addAnnotation, removeAnnotation,
     updateAnnotation, imageObjects, updateImageObject, addImageObject,
+    searchActiveMatches, searchCurrentMatchIndex,
   } = useDocumentStore();
   const { activeTool, toolOptions } = useToolStore();
 
@@ -250,7 +251,7 @@ export const PageCanvas = memo(function PageCanvas({
         reader.onload = (re) => {
           const src = re.target?.result as string;
           const id = `img-${Date.now()}`;
-          const newObj = { id, pageIndex, x: pos.x, y: pos.y, width: 200, height: 150, src, opacity: 1, rotation: 0 };
+          const newObj = { id, pageIndex, x: pos.x, y: pos.y, width: 200, height: 150, src, opacity: 1, rotation: 0, objectRef: '' };
           useHistoryStore.getState().push({
             label: 'Add image', description: 'Add image',
             targetIds: [id],
@@ -512,11 +513,28 @@ export const PageCanvas = memo(function PageCanvas({
                 }}
               />
             )}
-            {/* Rotation wrapper for text content */}
             <div
               className="absolute inset-0"
               style={{ transform: `rotate(${textObj.rotation ?? 0}deg)` }}
             >
+              {(() => {
+                const activeMatch = searchActiveMatches.find(
+                  (m) => m.textObjectId === textObj.id
+                );
+                if (!activeMatch) return null;
+                return (
+                  <div
+                    className="absolute pointer-events-none search-match-highlight"
+                    style={{
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                    }}
+                  />
+                );
+              })()}
+              {/* Render text content with highlight for matched substring */}
               {editingTextId === textObj.id ? (
                 <TextEditOverlay
                   textObject={textObj}
@@ -535,22 +553,53 @@ export const PageCanvas = memo(function PageCanvas({
                   }}
                 />
               ) : (
-                <span
-                  className="block overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
-                  style={{
-                    fontFamily: textObj.fontFamily,
-                    fontSize: textObj.fontSize,
-                    fontWeight: textObj.fontWeight,
-                    fontStyle: textObj.fontStyle,
-                    color: textObj.color,
-                    textAlign: textObj.textAlign,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {textObj.content}
-                </span>
+                (() => {
+                  const activeMatch = searchActiveMatches.find(
+                    (m) => m.textObjectId === textObj.id
+                  );
+                  const content = textObj.content;
+                  if (activeMatch && activeMatch.matchStart >= 0 && activeMatch.matchEnd <= content.length) {
+                    const before = content.slice(0, activeMatch.matchStart);
+                    const matched = content.slice(activeMatch.matchStart, activeMatch.matchEnd);
+                    const after = content.slice(activeMatch.matchEnd);
+                    return (
+                      <span
+                        className="block overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
+                        style={{
+                          fontFamily: textObj.fontFamily,
+                          fontSize: textObj.fontSize,
+                          fontWeight: textObj.fontWeight,
+                          fontStyle: textObj.fontStyle,
+                          color: textObj.color,
+                          textAlign: textObj.textAlign,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {before}
+                        <span className="search-match-highlight font-bold">{matched}</span>
+                        {after}
+                      </span>
+                    );
+                  }
+                  return (
+                    <span
+                      className="block overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
+                      style={{
+                        fontFamily: textObj.fontFamily,
+                        fontSize: textObj.fontSize,
+                        fontWeight: textObj.fontWeight,
+                        fontStyle: textObj.fontStyle,
+                        color: textObj.color,
+                        textAlign: textObj.textAlign,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {content}
+                    </span>
+                  );
+                })()
               )}
-            </div>
+              </div>
           </div>
         );
       })}

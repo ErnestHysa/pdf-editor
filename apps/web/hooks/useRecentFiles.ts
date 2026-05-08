@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useCallback, useState } from "react";
 import { openDB, IDBPDatabase } from "idb";
-// @ts-expect-error pdfjs-dist/legacy is available at runtime via next.config.js alias
 import * as pdfjsLib from "pdfjs-dist/legacy";
 
 const DB_NAME = "pagecraft";

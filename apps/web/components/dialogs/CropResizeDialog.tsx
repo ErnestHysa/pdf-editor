@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Crop, Maximize2, RotateCcw } from "lucide-react";
 import { useDocumentStore } from "@/stores/documentStore";
 import { PAGE_SIZES } from "@/lib/constants";
@@ -12,8 +12,11 @@ interface CropResizeDialogProps {
 
 type Tab = "crop" | "resize";
 
+const HANDLE_SIZE = 10;
+const THUMBNAIL_WIDTH = 160;
+
 export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
-  const { pdfDocument, activePageIndex, forceReload } = useDocumentStore();
+  const { pdfDocument, activePageIndex, forceReload, pdfJsDoc } = useDocumentStore();
 
   // Crop state
   const [cropTop, setCropTop] = useState(0);
@@ -30,6 +33,141 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [activeTab, setActiveTab] = useState<Tab>("crop");
+
+  // Dragging state
+  const [dragging, setDragging] = useState<"tl" | "tc" | "tr" | "ml" | "mr" | "bl" | "bc" | "br" | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number; cropTop: number; cropRight: number; cropBottom: number; cropLeft: number } | null>(null);
+  const thumbnailRef = useRef<HTMLDivElement>(null);
+
+  // Get page dimensions
+  const getPageDimensions = useCallback((index: number) => {
+    if (!pdfDocument) return { width: 612, height: 792 };
+    const libDoc = pdfDocument.getLibDoc();
+    const page = libDoc.getPage(index);
+    return page.getSize();
+  }, [pdfDocument]);
+
+  const pageDimensions = getPageDimensions(activePageIndex);
+  const scale = THUMBNAIL_WIDTH / pageDimensions.width;
+  const thumbHeight = pageDimensions.height * scale;
+
+  // Calculate crop region in thumbnail coordinates
+  const cropRegion = {
+    left: cropLeft * scale,
+    top: cropTop * scale,
+    right: (pageDimensions.width - cropRight) * scale,
+    bottom: (pageDimensions.height - cropBottom) * scale,
+  };
+
+  // Handle drag start
+  const handleDragStart = useCallback((handle: typeof dragging) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragging(handle);
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      cropTop,
+      cropRight,
+      cropBottom,
+      cropLeft,
+    };
+  }, [cropTop, cropRight, cropBottom, cropLeft]);
+
+  // Handle drag move
+  useEffect(() => {
+    if (!dragging || !dragStartRef.current) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const start = dragStartRef.current!;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      const dxPt = dx / scale;
+      const dyPt = -dy / scale; // Invert Y for PDF coords
+
+      let newTop = start.cropTop;
+      let newRight = start.cropRight;
+      let newBottom = start.cropBottom;
+      let newLeft = start.cropLeft;
+
+      // PDF coordinate: top-left is (cropLeft, height - cropTop)
+      // In thumbnail: top-left of crop region is at (cropLeft * scale, cropTop * scale)
+      switch (dragging) {
+        case "tl": // Top-left corner
+          newLeft = Math.max(0, Math.min(start.cropLeft + dxPt, pageDimensions.width - newRight - 10));
+          newTop = Math.max(0, Math.min(start.cropTop + dyPt, pageDimensions.height - newBottom - 10));
+          break;
+        case "tc": // Top-center
+          newTop = Math.max(0, Math.min(start.cropTop + dyPt, pageDimensions.height - newBottom - 10));
+          break;
+        case "tr": // Top-right corner
+          newRight = Math.max(0, Math.min(start.cropRight - dxPt, pageDimensions.width - newLeft - 10));
+          newTop = Math.max(0, Math.min(start.cropTop + dyPt, pageDimensions.height - newBottom - 10));
+          break;
+        case "ml": // Middle-left
+          newLeft = Math.max(0, Math.min(start.cropLeft + dxPt, pageDimensions.width - newRight - 10));
+          break;
+        case "mr": // Middle-right
+          newRight = Math.max(0, Math.min(start.cropRight - dxPt, pageDimensions.width - newLeft - 10));
+          break;
+        case "bl": // Bottom-left corner
+          newLeft = Math.max(0, Math.min(start.cropLeft + dxPt, pageDimensions.width - newRight - 10));
+          newBottom = Math.max(0, Math.min(start.cropBottom - dyPt, pageDimensions.height - newTop - 10));
+          break;
+        case "bc": // Bottom-center
+          newBottom = Math.max(0, Math.min(start.cropBottom - dyPt, pageDimensions.height - newTop - 10));
+          break;
+        case "br": // Bottom-right corner
+          newRight = Math.max(0, Math.min(start.cropRight - dxPt, pageDimensions.width - newLeft - 10));
+          newBottom = Math.max(0, Math.min(start.cropBottom - dyPt, pageDimensions.height - newTop - 10));
+          break;
+      }
+
+      setCropTop(Math.round(newTop));
+      setCropRight(Math.round(newRight));
+      setCropBottom(Math.round(newBottom));
+      setCropLeft(Math.round(newLeft));
+    };
+
+    const handleMouseUp = () => {
+      setDragging(null);
+      dragStartRef.current = null;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [dragging, scale, pageDimensions]);
+
+  // Thumbnail canvas render
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || !pdfJsDoc || activeTab !== "crop") return;
+
+    let cancelled = false;
+
+    pdfJsDoc.getPage(activePageIndex + 1).then((pdfPage: any) => {
+      if (cancelled) return;
+      const canvas = canvasRef.current!;
+      const viewport = pdfPage.getViewport({ scale });
+
+      canvas.width = THUMBNAIL_WIDTH;
+      canvas.height = thumbHeight;
+
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      pdfPage.render({ canvasContext: ctx, viewport } as any).promise;
+    });
+
+    return () => { cancelled = true; };
+  }, [pdfJsDoc, activePageIndex, scale, thumbHeight, activeTab]);
 
   const handleCropApply = useCallback(async () => {
     if (!pdfDocument) return;
@@ -86,7 +224,6 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
       const pages = libDoc.getPages();
       const pageCount = libDoc.getPageCount();
 
-      // Determine target dimensions
       let targetWidth = resizeWidth;
       let targetHeight = resizeHeight;
 
@@ -103,8 +240,6 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
 
       for (let i = 0; i < pageCount; i++) {
         const page = pages[i];
-        // pdf-lib setSize sets both the media box and crop box to new dimensions
-        // This is the standard resize approach for pdf-lib
         page.setSize(targetWidth, targetHeight);
       }
 
@@ -151,7 +286,7 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative bg-bg-elevated border border-border rounded-xl shadow-2xl w-[440px] animate-scale-in">
+      <div className="relative bg-bg-elevated border border-border rounded-xl shadow-2xl w-[520px] animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text-primary">Crop & Resize</h2>
@@ -190,8 +325,146 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
           {activeTab === "crop" && (
             <div className="space-y-4">
               <p className="text-xs text-text-tertiary">
-                Enter margins to remove from each side (in points). 1 inch = 72 points.
+                Drag handles to adjust crop region. Margins shown in points (1 inch = 72 pt).
               </p>
+
+              {/* Interactive thumbnail preview */}
+              <div className="flex justify-center">
+                <div
+                  ref={thumbnailRef}
+                  className="relative border border-border rounded bg-white overflow-hidden"
+                  style={{ width: THUMBNAIL_WIDTH, height: thumbHeight }}
+                >
+                  {/* Page thumbnail */}
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 w-full h-full"
+                  />
+
+                  {/* Darkened crop margins overlay */}
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      background: `linear-gradient(to bottom,
+                        rgba(0,0,0,0.3) 0%,
+                        rgba(0,0,0,0.3) ${cropRegion.top}px,
+                        transparent ${cropRegion.top}px,
+                        transparent ${cropRegion.bottom}px,
+                        rgba(0,0,0,0.3) ${cropRegion.bottom}px,
+                        rgba(0,0,0,0.3) 100%
+                      ), linear-gradient(to right,
+                        rgba(0,0,0,0.3) 0%,
+                        rgba(0,0,0,0.3) ${cropRegion.left}px,
+                        transparent ${cropRegion.left}px,
+                        transparent ${cropRegion.right}px,
+                        rgba(0,0,0,0.3) ${cropRegion.right}px,
+                        rgba(0,0,0,0.3) 100%
+                      )`,
+                    }}
+                  />
+
+                  {/* Crop region border */}
+                  <div
+                    className="absolute border-2 border-accent pointer-events-none"
+                    style={{
+                      left: cropRegion.left,
+                      top: cropRegion.top,
+                      right: THUMBNAIL_WIDTH - cropRegion.right,
+                      bottom: thumbHeight - cropRegion.bottom,
+                    }}
+                  />
+
+                  {/* Draggable handles */}
+                  {/* Top-left corner */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-nw-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: cropRegion.left - HANDLE_SIZE / 2,
+                      top: cropRegion.top - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("tl")}
+                  />
+                  {/* Top-center */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-n-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: (cropRegion.left + cropRegion.right) / 2 - HANDLE_SIZE / 2,
+                      top: cropRegion.top - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("tc")}
+                  />
+                  {/* Top-right corner */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-ne-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: cropRegion.right - HANDLE_SIZE / 2,
+                      top: cropRegion.top - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("tr")}
+                  />
+                  {/* Middle-left */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-w-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: cropRegion.left - HANDLE_SIZE / 2,
+                      top: (cropRegion.top + cropRegion.bottom) / 2 - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("ml")}
+                  />
+                  {/* Middle-right */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-e-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: cropRegion.right - HANDLE_SIZE / 2,
+                      top: (cropRegion.top + cropRegion.bottom) / 2 - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("mr")}
+                  />
+                  {/* Bottom-left corner */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-sw-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: cropRegion.left - HANDLE_SIZE / 2,
+                      top: cropRegion.bottom - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("bl")}
+                  />
+                  {/* Bottom-center */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-s-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: (cropRegion.left + cropRegion.right) / 2 - HANDLE_SIZE / 2,
+                      top: cropRegion.bottom - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("bc")}
+                  />
+                  {/* Bottom-right corner */}
+                  <div
+                    className="absolute bg-white border-2 border-accent cursor-se-resize"
+                    style={{
+                      width: HANDLE_SIZE,
+                      height: HANDLE_SIZE,
+                      left: cropRegion.right - HANDLE_SIZE / 2,
+                      top: cropRegion.bottom - HANDLE_SIZE / 2,
+                    }}
+                    onMouseDown={handleDragStart("br")}
+                  />
+                </div>
+              </div>
 
               {/* Crop margin inputs */}
               <div className="grid grid-cols-2 gap-3">
@@ -202,7 +475,7 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
                   <input
                     type="number"
                     value={cropTop}
-                    onChange={(e) => setCropTop(Math.max(0, Number(e.target.value)))}
+                    onChange={(e) => setCropTop(Math.max(0, Math.round(Number(e.target.value))))}
                     min={0}
                     className="w-full bg-bg-surface border border-border rounded-lg px-3 py-2 text-sm font-mono text-text-primary"
                   />
@@ -214,7 +487,7 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
                   <input
                     type="number"
                     value={cropRight}
-                    onChange={(e) => setCropRight(Math.max(0, Number(e.target.value)))}
+                    onChange={(e) => setCropRight(Math.max(0, Math.round(Number(e.target.value))))}
                     min={0}
                     className="w-full bg-bg-surface border border-border rounded-lg px-3 py-2 text-sm font-mono text-text-primary"
                   />
@@ -226,7 +499,7 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
                   <input
                     type="number"
                     value={cropBottom}
-                    onChange={(e) => setCropBottom(Math.max(0, Number(e.target.value)))}
+                    onChange={(e) => setCropBottom(Math.max(0, Math.round(Number(e.target.value))))}
                     min={0}
                     className="w-full bg-bg-surface border border-border rounded-lg px-3 py-2 text-sm font-mono text-text-primary"
                   />
@@ -238,7 +511,7 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
                   <input
                     type="number"
                     value={cropLeft}
-                    onChange={(e) => setCropLeft(Math.max(0, Number(e.target.value)))}
+                    onChange={(e) => setCropLeft(Math.max(0, Math.round(Number(e.target.value))))}
                     min={0}
                     className="w-full bg-bg-surface border border-border rounded-lg px-3 py-2 text-sm font-mono text-text-primary"
                   />

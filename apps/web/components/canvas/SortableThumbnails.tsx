@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useDocumentStore } from "@/stores/documentStore";
 import { cn } from "@/lib/utils";
+import { RotateCcw, RotateCw, Copy, Trash2, Crop, MoreHorizontal } from "lucide-react";
 
 interface SortableThumbnailsProps {
   pageCount: number;
@@ -59,6 +60,50 @@ function SortableThumbnailSlot({
   const { width, height } = getPageDimensions(pageIndex);
   const aspectRatio = width / height;
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // Store actions
+  const { duplicatePage, deletePage, rotatePage, cropPage } = useDocumentStore();
+  const pageCount = useDocumentStore((s) => s.pdfDocument?.getPageCount() ?? 0);
+  const canDelete = pageCount > 1;
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleRotateLeft = useCallback(() => {
+    rotatePage(pageIndex, "left");
+    closeContextMenu();
+  }, [pageIndex, rotatePage, closeContextMenu]);
+
+  const handleRotateRight = useCallback(() => {
+    rotatePage(pageIndex, "right");
+    closeContextMenu();
+  }, [pageIndex, rotatePage, closeContextMenu]);
+
+  const handleDuplicate = useCallback(() => {
+    duplicatePage(pageIndex);
+    closeContextMenu();
+  }, [pageIndex, duplicatePage, closeContextMenu]);
+
+  const handleDelete = useCallback(() => {
+    deletePage(pageIndex);
+    closeContextMenu();
+  }, [pageIndex, deletePage, closeContextMenu]);
+
+  const handleCrop = useCallback(() => {
+    cropPage(pageIndex);
+    closeContextMenu();
+  }, [pageIndex, cropPage, closeContextMenu]);
+
   // Render thumbnail via pdf.js
   // Use dynamic import for pdfjs to avoid SSR issues
   const renderThumbnail = useCallback(async () => {
@@ -86,46 +131,103 @@ function SortableThumbnailSlot({
     renderThumbnail();
   }
 
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 1000 : "auto",
-  };
-
   return (
-    <div
-      ref={isDragOverlay ? undefined : setNodeRef}
-      {...(isDragOverlay ? {} : { ...attributes, ...listeners })}
-      className={cn(
-        "relative rounded overflow-hidden border transition-all duration-150 flex-shrink-0 cursor-grab active:cursor-grabbing",
-        "hover:border-border-strong hover:scale-[1.02]",
-        isActive ? "border-accent ring-1 ring-accent/30" : "border-border",
-        isDragOverlay && "shadow-2xl scale-105 rotate-2"
+    <>
+      <div
+        ref={isDragOverlay ? undefined : setNodeRef}
+        {...(isDragOverlay ? {} : { ...attributes, ...listeners })}
+        className={cn(
+          "relative rounded overflow-hidden border transition-all duration-150 flex-shrink-0 cursor-grab active:cursor-grabbing",
+          "hover:border-border-strong hover:scale-[1.02]",
+          isActive ? "border-accent ring-1 ring-accent/30" : "border-border",
+          isDragOverlay && "shadow-2xl scale-105 rotate-2"
+        )}
+        style={
+          isDragOverlay
+            ? undefined
+            : {
+                transform: CSS.Transform.toString(transform),
+                transition,
+                opacity: isDragging ? 0.5 : 1,
+                zIndex: isDragging ? 1000 : "auto",
+                width: 80,
+                aspectRatio: `${80} / ${80 / aspectRatio}`,
+              }
+        }
+        onClick={onSelect}
+        onContextMenu={isDragOverlay ? undefined : handleContextMenu}
+      >
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
+          style={{ display: "block" }}
+        />
+        <span className="absolute bottom-0.5 right-1.5 text-2xs font-mono text-text-tertiary bg-bg-elevated/80 px-1 rounded z-10">
+          {pageIndex + 1}
+        </span>
+        {isDragOverlay && (
+          <div className="absolute inset-0 border-2 border-accent/50 rounded" />
+        )}
+      </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={closeContextMenu}
+            onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}
+          />
+          <div
+            className="fixed z-50 bg-bg-elevated border border-border rounded-lg shadow-xl py-1 min-w-[180px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={handleRotateLeft}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
+            >
+              <RotateCcw size={14} />
+              Rotate Left
+            </button>
+            <button
+              onClick={handleRotateRight}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
+            >
+              <RotateCw size={14} />
+              Rotate Right
+            </button>
+            <button
+              onClick={handleDuplicate}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
+            >
+              <Copy size={14} />
+              Duplicate Page
+            </button>
+            <button
+              onClick={handleCrop}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
+            >
+              <Crop size={14} />
+              Crop This Page
+            </button>
+            {canDelete && (
+              <>
+                <div className="h-px bg-border my-1" />
+                <button
+                  onClick={handleDelete}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-destructive"
+                >
+                  <Trash2 size={14} />
+                  Delete Page
+                </button>
+              </>
+            )}
+          </div>
+        </>
       )}
-      style={
-        isDragOverlay
-          ? undefined
-          : {
-              ...style,
-              width: 80,
-              aspectRatio: `${80} / ${80 / aspectRatio}`,
-            }
-      }
-      onClick={onSelect}
-    >
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ display: "block" }}
-      />
-      <span className="absolute bottom-0.5 right-1.5 text-2xs font-mono text-text-tertiary bg-bg-elevated/80 px-1 rounded z-10">
-        {pageIndex + 1}
-      </span>
-      {isDragOverlay && (
-        <div className="absolute inset-0 border-2 border-accent/50 rounded" />
-      )}
-    </div>
+    </>
   );
 }
 

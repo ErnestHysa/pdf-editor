@@ -43,7 +43,7 @@ export function EditorPage() {
     pdfDocument, setDocument, pdfJsDoc, setPdfJsDoc,
     activePageIndex, setActivePage,
     selectedObjects, clearSelection, setDirty, reloadTrigger,
-    setTextObjects, textObjects,
+    setTextObjects, addTextObject, textObjects,
     annotations, addAnnotation, removeAnnotation,
     imageObjects, addImageObject, removeImageObject, updateImageObject,
   } = useDocumentStore();
@@ -153,7 +153,71 @@ export function EditorPage() {
       if (isMod && e.key === 'y') { e.preventDefault(); redo(); return; }
       if (isMod && e.key === 'd') { e.preventDefault(); useDocumentStore.getState().duplicateSelected(); return; }
       if (isMod && e.key === 'c') { e.preventDefault(); useDocumentStore.getState().copySelected(); return; }
-      if (isMod && e.key === 'v') { e.preventDefault(); useDocumentStore.getState().pasteClipboard(); return; }
+      if (isMod && e.key === 'v') {
+        e.preventDefault();
+        // Use navigator.clipboard for both images and text (clipboard permission)
+        navigator.clipboard.read().then(async (items) => {
+          for (const item of items) {
+            // Image
+            const imageType = item.types.find((t) => t.startsWith('image/'));
+            if (imageType) {
+              const blob = await item.getType(imageType);
+              const dataUrl = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              const img = new Image();
+              img.onload = () => {
+                const page = pages[activePageIndex];
+                const pageWidth = page?.getWidth?.() ?? 612;
+                const pageHeight = page?.getHeight?.() ?? 792;
+                addImageObject({
+                  id: `img-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  pageIndex: activePageIndex,
+                  x: pageWidth / 2 - img.width / 2,
+                  y: pageHeight / 2 - img.height / 2,
+                  width: img.width,
+                  height: img.height,
+                  src: dataUrl,
+                  rotation: 0,
+                  objectRef: '',
+                });
+              };
+              img.src = dataUrl;
+              return;
+            }
+          }
+          // Fall back to text
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            const page = pages[activePageIndex];
+            const pageWidth = page?.getWidth?.() ?? 612;
+            const pageHeight = page?.getHeight?.() ?? 792;
+            addTextObject({
+              id: `text-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              pageIndex: activePageIndex,
+              content: text,
+              x: pageWidth / 2,
+              y: pageHeight / 2,
+              width: 200,
+              height: 50,
+              fontSize: 16,
+              fontFamily: 'sans-serif',
+              fontWeight: 'normal',
+              fontStyle: 'normal',
+              color: '#000000',
+              textAlign: 'left',
+              rotation: 0,
+              objectRef: '',
+            });
+          }
+        }).catch(() => {
+          // Fall back to internal clipboard store
+          useDocumentStore.getState().pasteClipboard();
+        });
+        return;
+      }
 
       if (e.key === 'Escape') { clearSelection(); setContextMenu(null); return; }
       if (e.key === '?') { e.preventDefault(); setShowShortcuts((v) => !v); return; }
@@ -263,6 +327,80 @@ export function EditorPage() {
     clearSelection();
   }, [selectedObjects, textObjects, clearSelection]);
 
+  // ── Paste handler: clipboard image or text → object at active page center ─
+  // Uses getState() to avoid stale closure on pages/pdfDocument
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const { pdfDocument: doc, activePageIndex: api, addImageObject: addImg, addTextObject: addTxt } = useDocumentStore.getState();
+    const pages = doc ? doc.getPages() : [];
+    const page = pages[api];
+    if (!page) return;
+
+    const pageWidth = page.getWidth?.() ?? 612;
+    const pageHeight = page.getHeight?.() ?? 792;
+    const centerX = pageWidth / 2;
+    const centerY = pageHeight / 2;
+
+    // Try image first
+    const imageItems = e.clipboardData?.items;
+    if (imageItems) {
+      for (const item of Array.from(imageItems)) {
+        if (item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          if (blob) {
+            const dataUrl = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+
+            const img = new Image();
+            img.onload = () => {
+              addImg({
+                id: `img-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                pageIndex: api,
+                x: centerX - img.width / 2,
+                y: centerY - img.height / 2,
+                width: img.width,
+                height: img.height,
+                src: dataUrl,
+                rotation: 0,
+                opacity: 1,
+                objectRef: '',
+              });
+            };
+            img.src = dataUrl;
+            return;
+          }
+        }
+      }
+    }
+
+    // Try text
+    const text = e.clipboardData?.getData('text/plain');
+    if (text) {
+      addTxt({
+        id: `text-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        pageIndex: api,
+        content: text,
+        x: centerX,
+        y: centerY,
+        width: 200,
+        height: 50,
+        fontSize: 16,
+        fontFamily: 'sans-serif',
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        color: '#000000',
+        textAlign: 'left',
+        rotation: 0,
+        objectRef: '',
+      });
+    }
+  }, []);
+
   // ── Virtualization: only render active page ± 2 buffer pages ─────
   const VIRTUAL_BUFFER = 2;
   const pages = pdfDocument ? pdfDocument.getPages() : [];
@@ -308,6 +446,7 @@ export function EditorPage() {
           aria-describedby="canvas-instructions"
           tabIndex={0}
           onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); }}
+          onPaste={handlePaste}
           onClick={(e) => {
             if ((e.target as HTMLElement).classList.contains('canvas-scroll-root')) {
               clearSelection();

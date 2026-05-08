@@ -23,7 +23,10 @@ export function SearchOverlay() {
   const inputRef = useRef<HTMLInputElement>(null);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const { textObjects, setActivePage } = useDocumentStore();
+  const {
+    textObjects, setActivePage,
+    setSearchActiveMatches, setSearchCurrentMatchIndex, clearSearch,
+  } = useDocumentStore();
 
   // Search through text objects and find matches
   const searchResults = useMemo((): SearchResult[] => {
@@ -94,15 +97,25 @@ export function SearchOverlay() {
       setQuery('');
       setSelectedIndex(0);
       setHighlightedId(null);
+      clearSearch();
       setTimeout(() => inputRef.current?.focus(), 10);
     }
-  }, [open]);
+  }, [open, clearSearch]);
 
   // Navigate to result
-  const navigateToResult = useCallback((result: SearchResult) => {
+  const navigateToResult = useCallback((result: SearchResult, matchIndex: number) => {
     const { textObject } = result;
     setActivePage(textObject.pageIndex);
     setHighlightedId(textObject.id);
+    setSearchCurrentMatchIndex(matchIndex);
+    // Add the matched text object's page to activeMatches list with position info
+    setSearchActiveMatches([{
+      textObjectId: textObject.id,
+      pageIndex: textObject.pageIndex,
+      matchStart: result.matchStart,
+      matchEnd: result.matchEnd,
+      matchText: result.matchText,
+    }]);
 
     // Clear any existing timeout
     if (highlightTimeoutRef.current) {
@@ -116,18 +129,44 @@ export function SearchOverlay() {
 
     setOpen(false);
     setQuery('');
-  }, [setActivePage]);
+  }, [setActivePage, setSearchActiveMatches, setSearchCurrentMatchIndex]);
 
   // Navigate prev/next
   const navigatePrev = useCallback(() => {
     if (searchResults.length === 0) return;
-    setSelectedIndex((i) => (i === 0 ? searchResults.length - 1 : i - 1));
-  }, [searchResults.length]);
+    const newIndex = selectedIndex === 0 ? searchResults.length - 1 : selectedIndex - 1;
+    setSelectedIndex(newIndex);
+    setSearchCurrentMatchIndex(newIndex);
+    const result = searchResults[newIndex];
+    if (result) {
+      setSearchActiveMatches([{
+        textObjectId: result.textObject.id,
+        pageIndex: result.textObject.pageIndex,
+        matchStart: result.matchStart,
+        matchEnd: result.matchEnd,
+        matchText: result.matchText,
+      }]);
+      setActivePage(result.textObject.pageIndex);
+    }
+  }, [searchResults.length, selectedIndex, searchResults, setActivePage, setSearchActiveMatches, setSearchCurrentMatchIndex]);
 
   const navigateNext = useCallback(() => {
     if (searchResults.length === 0) return;
-    setSelectedIndex((i) => (i === searchResults.length - 1 ? 0 : i + 1));
-  }, [searchResults.length]);
+    const newIndex = selectedIndex === searchResults.length - 1 ? 0 : selectedIndex + 1;
+    setSelectedIndex(newIndex);
+    setSearchCurrentMatchIndex(newIndex);
+    const result = searchResults[newIndex];
+    if (result) {
+      setSearchActiveMatches([{
+        textObjectId: result.textObject.id,
+        pageIndex: result.textObject.pageIndex,
+        matchStart: result.matchStart,
+        matchEnd: result.matchEnd,
+        matchText: result.matchText,
+      }]);
+      setActivePage(result.textObject.pageIndex);
+    }
+  }, [searchResults.length, selectedIndex, searchResults, setActivePage, setSearchActiveMatches, setSearchCurrentMatchIndex]);
 
   // Keyboard navigation in results
   useEffect(() => {
@@ -143,7 +182,7 @@ export function SearchOverlay() {
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (searchResults.length > 0) {
-          navigateToResult(searchResults[selectedIndex]);
+          navigateToResult(searchResults[selectedIndex], selectedIndex);
         }
       }
     };
@@ -297,7 +336,7 @@ export function SearchOverlay() {
                     return (
                       <button
                         key={`${result.textObject.id}-${globalIdx}`}
-                        onClick={() => navigateToResult(result)}
+                        onClick={() => navigateToResult(result, globalIdx)}
                         onMouseEnter={() => setSelectedIndex(globalIdx)}
                         className={cn(
                           'w-full text-left px-3 py-2.5 transition-colors rounded-lg',

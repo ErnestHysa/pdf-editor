@@ -1,11 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import {
   Sun, Moon, Download, Share2, Settings, PanelLeft, PanelRight,
-  Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive
+  Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDeviceType } from '@/hooks/useDeviceType';
@@ -23,10 +23,22 @@ export function TopBar() {
   const { fileName, isDirty, pdfDocument, activePageIndex } = useDocumentStore();
   const deviceType = useDeviceType();
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const lastAction = getLastAction();
+
+  // Clear error after 3 seconds
+  useEffect(() => {
+    if (exportError) {
+      const timer = setTimeout(() => setExportError(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [exportError]);
 
   const handleExport = async (type: string) => {
     setExportMenuOpen(false);
+    setExporting(type);
+    setExportError(null);
     try {
       switch (type) {
         case 'pdf':
@@ -47,6 +59,9 @@ export function TopBar() {
       }
     } catch (err) {
       console.error('Export failed:', err);
+      setExportError('Export failed. Please try again.');
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -148,12 +163,27 @@ export function TopBar() {
             <div className="relative">
               <button
                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+                disabled={!!exporting}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-white text-sm font-medium transition-colors",
+                  exporting
+                    ? "bg-accent/50 cursor-not-allowed"
+                    : "bg-accent hover:bg-accent-hover"
+                )}
                 aria-label="Export document"
               >
-                <Download size={14} />
-                {deviceType !== 'mobile' && 'Export'}
-                <ChevronDown size={12} />
+                {exporting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    {deviceType !== 'mobile' && 'Exporting...'}
+                  </>
+                ) : (
+                  <>
+                    <Download size={14} />
+                    {deviceType !== 'mobile' && 'Export'}
+                    <ChevronDown size={12} />
+                  </>
+                )}
               </button>
 
               {exportMenuOpen && (
@@ -227,6 +257,13 @@ export function TopBar() {
           <PanelRight size={16} />
         </button>
       </div>
+
+      {/* Export error toast */}
+      {exportError && (
+        <div className="absolute right-0 top-full mt-2 px-3 py-2 bg-red-500 text-white text-sm rounded-md shadow-lg z-50">
+          {exportError}
+        </div>
+      )}
     </header>
   );
 }
