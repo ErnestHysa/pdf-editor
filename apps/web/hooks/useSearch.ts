@@ -24,6 +24,8 @@ export function useSearch() {
   const {
     textObjects,
     pdfJsDoc,
+    searchActiveMatches,
+    searchCurrentMatchIndex,
     setSearchActiveMatches,
     setSearchCurrentMatchIndex,
     clearSearch: storeClearSearch,
@@ -112,5 +114,25 @@ export function useSearch() {
     storeClearSearch();
   }, [storeClearSearch]);
 
-  return { executeSearch, clearSearch: clearSearchHandler };
+  /**
+   * Navigate to the next search match (Enter key).
+   */
+  const nextMatch = useCallback(() => {
+    const matches = searchActiveMatches;
+    if (matches.length === 0) return;
+    const nextIdx = (searchCurrentMatchIndex + 1) % matches.length;
+    setSearchCurrentMatchIndex(nextIdx);
+  }, [searchActiveMatches, searchCurrentMatchIndex, setSearchCurrentMatchIndex]);
+
+  /**
+   * Navigate to the previous search match (Shift+Enter).
+   */
+  const prevMatch = useCallback(() => {
+    const matches = searchActiveMatches;
+    if (matches.length === 0) return;
+    const prevIdx = (searchCurrentMatchIndex - 1 + matches.length) % matches.length;
+    setSearchCurrentMatchIndex(prevIdx);
+  }, [searchActiveMatches, searchCurrentMatchIndex, setSearchCurrentMatchIndex]);
+
+  return { executeSearch, clearSearch: clearSearchHandler, nextMatch, prevMatch };
 }

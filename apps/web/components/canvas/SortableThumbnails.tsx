@@ -95,7 +95,9 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
   }, [pageIndex, duplicatePage, closeContextMenu]);
 
   const handleDelete = useCallback(() => {
-    deletePage(pageIndex);
+    if (window.confirm(`Delete page ${pageIndex + 1}? This cannot be undone.`)) {
+      deletePage(pageIndex);
+    }
     closeContextMenu();
   }, [pageIndex, deletePage, closeContextMenu]);
 

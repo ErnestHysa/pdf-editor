@@ -30,7 +30,7 @@ export function SearchOverlay() {
     setSearchActiveMatches, setSearchCurrentMatchIndex, clearSearch,
   } = useDocumentStore();
 
-  const { executeSearch, clearSearch: clearSearchHandler } = useSearch();
+  const { executeSearch, clearSearch: clearSearchHandler, nextMatch, prevMatch } = useSearch();
 
   // Derive search results from store's searchActiveMatches + textObjects for display
   const searchResults = useMemo((): SearchResult[] => {
@@ -262,6 +262,12 @@ export function SearchOverlay() {
             placeholder="Search text across pages..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (e.shiftKey) prevMatch();
+                else nextMatch();
+              }
+            }}
             className="w-full py-4 bg-transparent text-primary placeholder:text-tertiary outline-none text-sm px-3"
           />
           {query && (

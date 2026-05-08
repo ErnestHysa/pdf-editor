@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { Page } from '@pagecraft/pdf-engine';
-import { useDocumentStore } from '@/stores/documentStore';
+import { useDocumentStore, DocumentState } from '@/stores/documentStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useToolStore } from '@/stores/toolStore';
 import { useHistoryStore } from '@/stores/historyStore';
@@ -53,13 +53,24 @@ export const PageCanvas = memo(function PageCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const drawCanvasCtxRef = useRef<CanvasRenderingContext2D | null>(null);
 
-  const {
-    textObjects, selectedObjects, selectObject, clearSelection,
-    setDirty, annotations, addAnnotation, removeAnnotation,
-    updateAnnotation, imageObjects, updateImageObject, addImageObject,
-    searchActiveMatches, searchCurrentMatchIndex,
-  } = useDocumentStore();
+  const textObjects = useDocumentStore(useCallback((s: DocumentState) => 
+    s.textObjects.filter(o => o.pageIndex === pageIndex), [pageIndex]));
+  const imageObjects = useDocumentStore(useCallback((s: DocumentState) => 
+    s.imageObjects.filter(o => o.pageIndex === pageIndex), [pageIndex]));
+  const annotations = useDocumentStore(useCallback((s: DocumentState) => 
+    s.annotations.filter(a => a.pageIndex === pageIndex), [pageIndex]));
   const { activeTool, toolOptions } = useToolStore();
+  const selectedObjects = useDocumentStore((s) => s.selectedObjects);
+  const addAnnotation = useDocumentStore((s) => s.addAnnotation);
+  const removeAnnotation = useDocumentStore((s) => s.removeAnnotation);
+  const updateAnnotation = useDocumentStore((s) => s.updateAnnotation);
+  const updateImageObject = useDocumentStore((s) => s.updateImageObject);
+  const addImageObject = useDocumentStore((s) => s.addImageObject);
+  const selectObject = useDocumentStore((s) => s.selectObject);
+  const clearSelection = useDocumentStore((s) => s.clearSelection);
+  const setDirty = useDocumentStore((s) => s.setDirty);
+  const searchActiveMatches = useDocumentStore((s) => s.searchActiveMatches);
+  const searchCurrentMatchIndex = useDocumentStore((s) => s.searchCurrentMatchIndex);
 
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [isDrawingStroke, setIsDrawingStroke] = useState(false);
@@ -129,8 +140,9 @@ export const PageCanvas = memo(function PageCanvas({
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
   const pageObjects = page.getObjects();
-  const pageTextObjects = textObjects.filter((o: { pageIndex: number }) => o.pageIndex === pageIndex) as SerializableTextObject[];
-  const pageAnnotations = annotations.filter((a: { pageIndex: number }) => a.pageIndex === pageIndex);
+  // textObjects, imageObjects, annotations are already filtered per pageIndex at subscription time
+  const pageTextObjects = textObjects as SerializableTextObject[];
+  const pageAnnotations = annotations;
   const pageSelected = selectedObjects.filter((o: { pageIndex: number }) => o.pageIndex === pageIndex);
 
   // ── pdf.js canvas rendering ──────────────────────────────────────
@@ -173,8 +185,9 @@ export const PageCanvas = memo(function PageCanvas({
   // ── Draw freehand strokes when annotations change ─────────────────
   useEffect(() => {
     const canvas = drawCanvasRef.current;
-    const ctx = drawCanvasCtxRef.current;
+    const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
+    drawCanvasCtxRef.current = ctx;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const drawingAnnotations = annotations.filter(
       (a: { type: string; pageIndex: number }) => a.type === 'drawing' && a.pageIndex === pageIndex
@@ -182,7 +195,8 @@ export const PageCanvas = memo(function PageCanvas({
     for (const ann of drawingAnnotations) {
       const img = new Image();
       img.onload = () => {
-        ctx.drawImage(img, ann.x * renderScale, ann.y * renderScale,
+        if (!drawCanvasCtxRef.current) return;  // component unmounted
+        drawCanvasCtxRef.current.drawImage(img, ann.x * renderScale, ann.y * renderScale,
           ann.width * renderScale, ann.height * renderScale);
       };
       img.src = (ann as any).imageData ?? '';
@@ -615,12 +629,6 @@ export const PageCanvas = memo(function PageCanvas({
                   onClose={() => setEditingTextId(null)}
                   onSave={(newContent) => {
                     const oldContent = textObj.content;
-                    useHistoryStore.getState().push({
-                      label: 'Edit text', description: 'Edit text',
-                      targetIds: [textObj.id],
-                      undo: () => useDocumentStore.getState().updateTextObject(textObj.id, { content: oldContent }),
-                      redo: () => useDocumentStore.getState().updateTextObject(textObj.id, { content: newContent }),
-                    });
                     useDocumentStore.getState().updateTextObject(textObj.id, { content: newContent });
                     setDirty(true);
                     setEditingTextId(null);

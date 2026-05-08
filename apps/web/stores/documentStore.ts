@@ -131,7 +131,7 @@ export interface SelectedObject {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PdfJsDocumentProxy = any;
 
-interface DocumentState {
+export interface DocumentState {
   pdfDocument: PdfDocument | null;
   pdfJsDoc: PdfJsDocumentProxy | null; // pdf.js document proxy for rendering
   textObjects: SerializableTextObject[];       // parsed text objects from PdfParser
