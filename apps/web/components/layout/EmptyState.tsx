@@ -1,15 +1,87 @@
 "use client";
 import { useCallback, useState } from "react";
-import { Upload, FileText } from "lucide-react";
+import { Upload, FileText, X, Clock, File } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useRecentFiles, RecentFile } from "@/hooks/useRecentFiles";
+import { PdfEngine } from "@pagecraft/pdf-engine";
+import { useDocumentStore } from "@/stores/documentStore";
+import { useUIStore } from "@/stores/uiStore";
 
 interface EmptyStateProps {
   onFile: (file: File) => Promise<void>;
 }
 
+function formatDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString();
+}
+
+function RecentFileCard({
+  file,
+  onClick,
+  onRemove,
+}: {
+  file: RecentFile;
+  onClick: () => void;
+  onRemove: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      className="relative group flex-shrink-0 w-36 cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="rounded-lg border border-border bg-bg-surface overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+        {/* Thumbnail */}
+        <div className="w-full aspect-[100/140] bg-bg-elevated flex items-center justify-center overflow-hidden">
+          {file.thumbnail ? (
+            <img
+              src={file.thumbnail}
+              alt={file.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <File size={40} className="text-text-tertiary" />
+          )}
+        </div>
+        {/* Info */}
+        <div className="p-2">
+          <p className="text-xs font-medium text-text-primary truncate" title={file.name}>
+            {file.name}
+          </p>
+          <div className="flex items-center gap-1 mt-0.5 text-[10px] text-text-secondary">
+            <Clock size={9} />
+            <span>{formatDate(file.lastModified)}</span>
+            <span className="mx-0.5">·</span>
+            <span>{file.pageCount} {file.pageCount === 1 ? "page" : "pages"}</span>
+          </div>
+        </div>
+      </div>
+      {/* Remove button */}
+      <button
+        onClick={onRemove}
+        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg-elevated/90 border border-border text-text-secondary hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+        title="Remove from recent"
+      >
+        <X size={10} />
+      </button>
+    </div>
+  );
+}
+
 export function EmptyState({ onFile }: EmptyStateProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { recentFiles, clearAll, removeFile } = useRecentFiles();
+  const { setDocument } = useDocumentStore();
+  const { setZoom } = useUIStore();
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.includes("pdf") && !file.name.endsWith(".pdf")) {
@@ -36,8 +108,57 @@ export function EmptyState({ onFile }: EmptyStateProps) {
     if (file) handleFile(file);
   };
 
+  const loadRecentFile = useCallback(async (recentFile: RecentFile) => {
+    setIsLoading(true);
+    try {
+      const engine = new PdfEngine();
+      const doc = await engine.load(recentFile.pdfData);
+      setDocument(doc, recentFile.name, recentFile.pdfData.byteLength);
+      setZoom(1.0);
+    } catch (err) {
+      console.error("[RecentFiles] load failed:", err);
+      setError("Failed to open document.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setDocument, setZoom]);
+
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[500px] px-8">
+      {/* Recent Documents */}
+      {recentFiles.length > 0 && (
+        <div className="w-full max-w-2xl mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-text-primary">Recent Documents</h3>
+            <button
+              onClick={clearAll}
+              className="text-xs text-text-tertiary hover:text-destructive transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+            {recentFiles.map((file) => (
+              <RecentFileCard
+                key={file.id}
+                file={file}
+                onClick={() => loadRecentFile(file)}
+                onRemove={(e) => {
+                  e.stopPropagation();
+                  removeFile(file.id);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* No recent docs message */}
+      {recentFiles.length === 0 && (
+        <p className="text-sm text-text-tertiary mb-6">No recent documents</p>
+      )}
+
+      {/* Upload area */}
       <div
         className={cn(
           "relative flex flex-col items-center justify-center w-full max-w-md rounded-xl border-2 border-dashed transition-all duration-200",
@@ -86,6 +207,10 @@ export function EmptyState({ onFile }: EmptyStateProps) {
 
         {error && (
           <p className="mt-3 text-xs text-destructive">{error}</p>
+        )}
+
+        {isLoading && (
+          <p className="mt-3 text-xs text-text-secondary">Opening document...</p>
         )}
 
         <p className="mt-4 text-xs text-text-tertiary text-center">

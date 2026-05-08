@@ -1,8 +1,9 @@
-'use client';
+"use client";
 import { useCallback, useRef } from 'react';
 import { PdfEngine } from '@pagecraft/pdf-engine';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useUIStore } from '@/stores/uiStore';
+import { saveRecentFile } from '@/hooks/useRecentFiles';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -31,6 +32,13 @@ export function useFileHandler() {
       const doc = await engine.load(buffer);
       setDocument(doc, file.name, file.size);
       setZoom(1.0);
+      // Save to recent files (non-blocking)
+      saveRecentFile(
+        `${file.name}-${file.size}`,
+        file.name,
+        buffer,
+        doc.getPageCount()
+      ).catch(() => {});
     } finally {
       setLoading(false);
     }
