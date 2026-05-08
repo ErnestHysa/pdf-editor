@@ -3,7 +3,7 @@ import { useCallback, useRef } from 'react';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { TextObject } from '@pagecraft/pdf-engine';
-import { glyphPreservingEdit } from './usePdfExporter';
+import { glyphPreservingEdit } from '@/lib/pdf/glyphEditor';
 
 interface TextEditState {
   objectId: string | null;

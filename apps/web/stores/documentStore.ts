@@ -140,6 +140,8 @@ interface DocumentState {
   fileSize: number;
   isDirty: boolean;
   isLoading: boolean;
+  saveStatus: 'idle' | 'saving' | 'saved' | 'offline';
+  lastSavedAt: number | null;
   selectedObjects: SelectedObject[];
   activePageIndex: number;
   reloadTrigger: number; // incremented to force full pdf.js reload (all pages)
@@ -154,6 +156,8 @@ interface DocumentState {
   setPdfJsDoc: (doc: PdfJsDocumentProxy | null) => void;
   setLoading: (loading: boolean) => void;
   setDirty: (dirty: boolean) => void;
+  setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'offline') => void;
+  setLastSavedAt: (timestamp: number | null) => void;
   selectObject: (obj: SelectedObject | null) => void;
   selectObjects: (objs: SelectedObject[]) => void;
   clearSelection: () => void;
@@ -216,6 +220,8 @@ const initialState = {
   fileSize: 0,
   isDirty: false,
   isLoading: false,
+  saveStatus: 'idle' as const,
+  lastSavedAt: null,
   selectedObjects: [],
   activePageIndex: 0,
   reloadTrigger: 0,
@@ -240,6 +246,8 @@ export const useDocumentStore = create<DocumentState>()(
         state.fileName = fileName;
         state.fileSize = fileSize;
         state.isDirty = false;
+        state.saveStatus = 'idle';
+        state.lastSavedAt = null;
         state.selectedObjects = [];
         state.activePageIndex = 0;
         state.textObjects = []; // clear parsed text objects
@@ -251,6 +259,10 @@ export const useDocumentStore = create<DocumentState>()(
       set((state) => { state.isLoading = loading; }),
     setDirty: (dirty) =>
       set((state) => { state.isDirty = dirty; }),
+    setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'offline') =>
+      set((state) => { state.saveStatus = status; }),
+    setLastSavedAt: (timestamp: number | null) =>
+      set((state) => { state.lastSavedAt = timestamp; }),
     selectObject: (obj) =>
       set((state) => {
         state.selectedObjects = obj ? [obj] : [];
@@ -351,7 +363,11 @@ export const useDocumentStore = create<DocumentState>()(
           ...o,
           pageIndex: o.pageIndex > index ? o.pageIndex - 1 : o.pageIndex,
         }));
-        state.reloadTrigger += 1;
+        // Targeted reload for the affected region (all pages shift)
+        state.targetedReloads = {};
+        for (let i = 0; i < newCount; i++) {
+          state.targetedReloads[i] = Date.now();
+        }
       });
     },
 
@@ -362,7 +378,11 @@ export const useDocumentStore = create<DocumentState>()(
       set((state) => {
         state.isDirty = true;
         state.activePageIndex = newPage.getIndex();
-        state.reloadTrigger += 1;
+        // Targeted reload for the new page and the page after it (shift)
+        const newCount = doc.getPageCount();
+        state.targetedReloads = {};
+        state.targetedReloads[index] = Date.now();
+        state.targetedReloads[newPage.getIndex()] = Date.now();
       });
     },
 
@@ -382,7 +402,13 @@ export const useDocumentStore = create<DocumentState>()(
         } else if (fromIndex > toIndex && currentActive >= toIndex && currentActive < fromIndex) {
           state.activePageIndex = currentActive + 1;
         }
-        state.reloadTrigger += 1;
+        // Targeted reload for all pages in the affected range
+        const minIdx = Math.min(fromIndex, toIndex);
+        const maxIdx = Math.max(fromIndex, toIndex);
+        state.targetedReloads = {};
+        for (let i = minIdx; i <= maxIdx; i++) {
+          state.targetedReloads[i] = Date.now();
+        }
       });
     },
 
@@ -410,7 +436,7 @@ export const useDocumentStore = create<DocumentState>()(
       if (!page) return;
       set((state) => {
         state.isDirty = true;
-        state.reloadTrigger += 1;
+        state.targetedReloads[index] = Date.now();
       });
     },
 

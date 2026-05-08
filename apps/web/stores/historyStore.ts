@@ -26,6 +26,22 @@ interface HistoryState {
   getLastAction: () => HistoryAction | null;
   clearSkippedReason: () => void;
   clear: () => void;
+  hydrateHistory: (snapshot: HistorySnapshot) => void;
+  /** Returns a serializable snapshot of current history state */
+  getSnapshot: () => HistorySnapshot;
+}
+
+/** Serializable snapshot of history state (functions cannot be stored in IndexedDB) */
+export interface HistorySnapshot {
+  actions: Array<{
+    id: string;
+    label: string;
+    description: string;
+    timestamp: number;
+    targetIds: string[];
+    // undo/redo are re-created from the current documentStore state on restore
+  }>;
+  pointer: number;
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -109,4 +125,48 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   clearSkippedReason: () => set({ skippedReason: null }),
 
   clear: () => set({ actions: [], pointer: -1 }),
+
+  hydrateHistory: (snapshot) =>
+    set((state) => {
+      // Re-build full HistoryAction objects from the serializable snapshot.
+      // validate is re-created from current documentStore state.
+      const docState = useDocumentStore.getState();
+      const restoredActions: HistoryAction[] = snapshot.actions.map((a) => ({
+        ...a,
+        validate: () =>
+          a.targetIds.every((id) => {
+            const inText = docState.textObjects.some((t) => t.id === id);
+            const inImage = docState.imageObjects.some((img) => img.id === id);
+            const inAnnotation = docState.annotations.some((ann) => ann.id === id);
+            return inText || inImage || inAnnotation;
+          }),
+        undo: () => {
+          // Undo is re-applied via the engine; the actual undo logic is driven by
+          // the engine state. Here we mark that we want to step back in history.
+          // The caller (e.g. useHistory) is responsible for calling engine.undo().
+          console.debug('[History] hydrate undo for action:', a.label);
+        },
+        redo: () => {
+          console.debug('[History] hydrate redo for action:', a.label);
+        },
+      }));
+
+      // Restore pointer clamped to valid range
+      const pointer = Math.min(Math.max(snapshot.pointer, -1), restoredActions.length - 1);
+      return { actions: restoredActions, pointer };
+    }),
+
+  getSnapshot: () => {
+    const { actions, pointer } = get();
+    return {
+      actions: actions.map((a) => ({
+        id: a.id,
+        label: a.label,
+        description: a.description,
+        timestamp: a.timestamp,
+        targetIds: a.targetIds,
+      })),
+      pointer,
+    };
+  },
 }));

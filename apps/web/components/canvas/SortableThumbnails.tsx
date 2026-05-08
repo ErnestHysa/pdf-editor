@@ -1,5 +1,6 @@
 "use client";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   DndContext,
   closestCenter,
@@ -29,24 +30,22 @@ interface SortableThumbnailsProps {
   onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
-// ── Sortable Thumbnail Slot ─────────────────────────────────────
-interface SortableThumbnailSlotProps {
-  pageIndex: number;
-  isActive: boolean;
-  onSelect: () => void;
-  pdfJsDoc: any;
-  getPageDimensions: (index: number) => { width: number; height: number };
-  isDragOverlay?: boolean;
-}
-
-function SortableThumbnailSlot({
+// ── Memoized Thumbnail Slot ─────────────────────────────────────
+const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
   pageIndex,
   isActive,
   onSelect,
   pdfJsDoc,
   getPageDimensions,
   isDragOverlay = false,
-}: SortableThumbnailSlotProps) {
+}: {
+  pageIndex: number;
+  isActive: boolean;
+  onSelect: () => void;
+  pdfJsDoc: any;
+  getPageDimensions: (index: number) => { width: number; height: number };
+  isDragOverlay?: boolean;
+}) {
   const {
     attributes,
     listeners,
@@ -59,6 +58,7 @@ function SortableThumbnailSlot({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { width, height } = getPageDimensions(pageIndex);
   const aspectRatio = width / height;
+  const thumbWidth = 80;
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -104,27 +104,26 @@ function SortableThumbnailSlot({
     closeContextMenu();
   }, [pageIndex, cropPage, closeContextMenu]);
 
-  // Render thumbnail via pdf.js
-  // Use dynamic import for pdfjs to avoid SSR issues
+  // Render thumbnail via pdf.js — memoized to avoid re-renders
   const renderThumbnail = useCallback(async () => {
     if (!canvasRef.current || !pdfJsDoc) return;
     try {
       const pdfPage = await pdfJsDoc.getPage(pageIndex + 1);
-      const scale = 80 / width;
-      canvasRef.current.width = 80;
+      const scale = thumbWidth / width;
+      canvasRef.current.width = thumbWidth;
       canvasRef.current.height = height * scale;
       const ctx = canvasRef.current.getContext("2d");
       if (!ctx) return;
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, 80, canvasRef.current.height);
+      ctx.fillRect(0, 0, thumbWidth, canvasRef.current.height);
       const viewport = pdfPage.getViewport({ scale });
       await pdfPage.render({ canvasContext: ctx, viewport } as any).promise;
     } catch (err) {
       console.error(`Thumbnail page ${pageIndex + 1} error:`, err);
     }
-  }, [pdfJsDoc, pageIndex, width, height]);
+  }, [pdfJsDoc, pageIndex, width, height, thumbWidth]);
 
-  // Re-render when pdfJsDoc changes
+  // Render when pdfJsDoc changes
   const prevPdfJsDocRef = useRef(pdfJsDoc);
   if (pdfJsDoc !== prevPdfJsDocRef.current) {
     prevPdfJsDocRef.current = pdfJsDoc;
@@ -150,8 +149,8 @@ function SortableThumbnailSlot({
                 transition,
                 opacity: isDragging ? 0.5 : 1,
                 zIndex: isDragging ? 1000 : "auto",
-                width: 80,
-                aspectRatio: `${80} / ${80 / aspectRatio}`,
+                width: thumbWidth,
+                aspectRatio: `${thumbWidth} / ${(thumbWidth * height) / width}`,
               }
         }
         onClick={onSelect}
@@ -229,9 +228,9 @@ function SortableThumbnailSlot({
       )}
     </>
   );
-}
+});
 
-// ── Sortable Thumbnails ─────────────────────────────────────────
+// ── Sortable Thumbnails (Virtualized) ───────────────────────────
 export function SortableThumbnails({
   pageCount,
   getPageDimensions,
@@ -240,10 +239,12 @@ export function SortableThumbnails({
   const { activePageIndex, setActivePage, pdfJsDoc } = useDocumentStore();
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // require 8px movement before drag starts
+        distance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -251,8 +252,16 @@ export function SortableThumbnails({
     })
   );
 
-  // Build ordered array of page ids
+  // Full list of page ids — used by dnd-kit for drag coordination
   const pageIds = Array.from({ length: pageCount }, (_, i) => `page-${i}`);
+
+  // Virtualizer — only renders visible thumbnails
+  const virtualizer = useVirtualizer({
+    count: pageCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 84, // 80px thumbnail + 4px gap
+    overscan: 5,
+  });
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -275,8 +284,8 @@ export function SortableThumbnails({
     [pageIds, onReorder]
   );
 
-  // Find the active page index from the dragging id
   const activeDragIndex = activeId ? pageIds.indexOf(activeId) : -1;
+  const virtualItems = virtualizer.getVirtualItems();
 
   return (
     <DndContext
@@ -286,17 +295,41 @@ export function SortableThumbnails({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={pageIds} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-1 px-2">
-          {pageIds.map((id, i) => (
-            <SortableThumbnailSlot
-              key={id}
-              pageIndex={i}
-              isActive={i === activePageIndex}
-              onSelect={() => setActivePage(i)}
-              pdfJsDoc={pdfJsDoc}
-              getPageDimensions={getPageDimensions}
-            />
-          ))}
+        {/* Scrollable virtualized container */}
+        <div
+          ref={scrollRef}
+          className="flex flex-col gap-1 px-2 overflow-y-auto"
+          style={{ height: "100%" }}
+        >
+          {/* Total scroll size spacer */}
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              position: "relative",
+            }}
+          >
+            {virtualItems.map((virtualItem) => (
+              <div
+                key={pageIds[virtualItem.index]}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: virtualItem.size,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <SortableThumbnailSlot
+                  pageIndex={virtualItem.index}
+                  isActive={virtualItem.index === activePageIndex}
+                  onSelect={() => setActivePage(virtualItem.index)}
+                  pdfJsDoc={pdfJsDoc}
+                  getPageDimensions={getPageDimensions}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </SortableContext>
 

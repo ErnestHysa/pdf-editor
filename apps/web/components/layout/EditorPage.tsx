@@ -220,7 +220,7 @@ export function EditorPage() {
         return;
       }
 
-      if (e.key === 'Escape') { clearSelection(); setContextMenu(null); return; }
+      if (e.key === 'Escape') { clearSelection(); setContextMenu(null); if (showShortcuts) setShowShortcuts(false); return; }
       if (e.key === '?') { e.preventDefault(); setShowShortcuts((v) => !v); return; }
       if (isMod && e.key === 'k') { e.preventDefault(); useUIStore.getState().setCommandPaletteOpen(true); return; }
 
@@ -276,7 +276,7 @@ export function EditorPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, clearSelection]);
+  }, [undo, redo, clearSelection, showShortcuts]);
 
   // Shared delete logic used by keyboard and context menu
   const handleDeleteSelected = useCallback(() => {

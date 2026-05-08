@@ -5,7 +5,7 @@ import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import {
   Sun, Moon, Download, Share2, Settings, PanelLeft, PanelRight,
-  Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive, Loader2
+  Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive, Loader2, Check, WifiOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDeviceType } from '@/hooks/useDeviceType';
@@ -20,7 +20,7 @@ import {
 export function TopBar() {
   const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel } = useUIStore();
   const { undo, redo, canUndo, canRedo, getLastAction } = useHistoryStore();
-  const { fileName, isDirty, pdfDocument, activePageIndex } = useDocumentStore();
+  const { fileName, isDirty, pdfDocument, activePageIndex, saveStatus, lastSavedAt } = useDocumentStore();
   const deviceType = useDeviceType();
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
@@ -103,6 +103,30 @@ export function TopBar() {
             </span>
             {isDirty && (
               <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" title="Unsaved changes" />
+            )}
+          </div>
+        )}
+
+        {/* Autosave status indicator */}
+        {pdfDocument && saveStatus !== 'idle' && (
+          <div className="flex items-center gap-1 ml-2 text-xs text-text-tertiary">
+            {saveStatus === 'saving' && (
+              <>
+                <Loader2 size={12} className="animate-spin" />
+                <span>Saving...</span>
+              </>
+            )}
+            {saveStatus === 'saved' && (
+              <>
+                <Check size={12} className="text-green-500" />
+                <span>Saved</span>
+              </>
+            )}
+            {saveStatus === 'offline' && (
+              <>
+                <WifiOff size={12} className="text-orange-500" />
+                <span>Offline</span>
+              </>
             )}
           </div>
         )}

@@ -2,12 +2,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { openDB, IDBPDatabase } from "idb";
 import { useDocumentStore } from "@/stores/documentStore";
+import { useHistoryStore } from "@/stores/historyStore";
 import { exportPdfWithChanges } from "./usePdfExporter";
 import { AUTOSAVE_DELAY_MS } from "@/lib/constants";
 
 const DB_NAME = "pagecraft";
-const DB_VERSION = 2; // Bump version for schema update
+const DB_VERSION = 3; // Bump version; useAutosave + useRecentFiles both touch schema
 const STORE_NAME = "documents";
+const HISTORY_STORE_NAME = "history";
 const BROADCAST_CHANNEL_NAME = "pagecraft-documents";
 
 interface SavedDocument {
@@ -33,6 +35,12 @@ async function getDb(): Promise<IDBPDatabase> {
           db.createObjectStore(STORE_NAME, { keyPath: "id" });
         }
       }
+      if (oldVersion < 3) {
+        // Version 3 adds history store
+        if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
+          db.createObjectStore(HISTORY_STORE_NAME, { keyPath: "docId" });
+        }
+      }
     },
   });
 }
@@ -56,7 +64,7 @@ function getBroadcastChannel(): BroadcastChannel | null {
 }
 
 export function useAutosave() {
-  const { pdfDocument, fileName, isDirty, setDirty } = useDocumentStore();
+  const { pdfDocument, fileName, isDirty, setDirty, setSaveStatus, setLastSavedAt } = useDocumentStore();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Broadcast save event to other tabs
@@ -75,6 +83,7 @@ export function useAutosave() {
 
     saveTimer.current = setTimeout(async () => {
       try {
+        setSaveStatus('saving');
         const libDoc = pdfDocument.getLibDoc();
         const pdfBytes = await libDoc.save();
         const db = await getDb();
@@ -89,17 +98,25 @@ export function useAutosave() {
         } as SavedDocument);
 
         setDirty(false);
+        setSaveStatus('saved');
+        setLastSavedAt(now);
         broadcastSave(now);
         console.log("[Autosave] saved to IndexedDB:", fileName);
+
+        // Also persist history state for this document
+        const docId = fileName ?? "unknown";
+        const snapshot = useHistoryStore.getState().getSnapshot();
+        await saveHistory(docId, snapshot);
       } catch (err) {
         console.error("[Autosave] failed:", err);
+        setSaveStatus('offline');
       }
     }, AUTOSAVE_DELAY_MS);
 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [pdfDocument, isDirty, fileName, setDirty, broadcastSave]);
+  }, [pdfDocument, isDirty, fileName, setDirty, setSaveStatus, setLastSavedAt, broadcastSave]);
 }
 
 /** Load the most recent autosaved document from IndexedDB */
@@ -238,4 +255,53 @@ export async function checkConflictOnLoad(): Promise<{
   // The conflict check is more relevant when another tab broadcasts while we're editing
 
   return { hasConflict: external, savedData: saved };
+}
+
+// ── History persistence ─────────────────────────────────────────────
+
+/** Key used in IndexedDB for a document's history stack */
+function historyKey(docId: string): string {
+  return `history-${docId}`;
+}
+
+/** Save the full history state for a document to IndexedDB */
+export async function saveHistory(
+  docId: string,
+  snapshot: import("@/stores/historyStore").HistorySnapshot
+): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.put(
+      HISTORY_STORE_NAME,
+      { docId: historyKey(docId), ...snapshot },
+      historyKey(docId)
+    );
+    console.debug("[Autosave] history saved for doc:", docId);
+  } catch (err) {
+    console.error("[Autosave] saveHistory failed:", err);
+  }
+}
+
+/** Load saved history snapshot for a document from IndexedDB */
+export async function loadHistory(
+  docId: string
+): Promise<import("@/stores/historyStore").HistorySnapshot | null> {
+  try {
+    const db = await getDb();
+    const saved = await db.get(HISTORY_STORE_NAME, historyKey(docId));
+    return saved ?? null;
+  } catch (err) {
+    console.error("[Autosave] loadHistory failed:", err);
+    return null;
+  }
+}
+
+/** Delete saved history for a document */
+export async function deleteHistory(docId: string): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.delete(HISTORY_STORE_NAME, historyKey(docId));
+  } catch (err) {
+    console.error("[Autosave] deleteHistory failed:", err);
+  }
 }
