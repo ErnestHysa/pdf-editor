@@ -142,7 +142,10 @@ interface DocumentState {
   isLoading: boolean;
   selectedObjects: SelectedObject[];
   activePageIndex: number;
-  reloadTrigger: number; // incremented to force pdf.js reload (e.g. after rotation)
+  reloadTrigger: number; // incremented to force full pdf.js reload (all pages)
+  // Targeted reload tracking — which pages need canvas re-render after pdf-lib edits
+  pendingEdits: Array<{ pageIndex: number; reason: 'page-change' | 'image-insert' }>;
+  pendingPageReload: number; // incremented to trigger re-render of marked pages only
   clipboard: SerializableTextObject[]; // copied text objects for paste
   annotations: AnnotationObject[]; // R35-R42 annotation objects
 
@@ -215,6 +218,8 @@ const initialState = {
   selectedObjects: [],
   activePageIndex: 0,
   reloadTrigger: 0,
+  pendingEdits: [],
+  pendingPageReload: 0,
   textObjects: [],
   imageObjects: [],
   clipboard: [],

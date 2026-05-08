@@ -3,6 +3,7 @@ import { useCallback, useRef } from 'react';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { TextObject } from '@pagecraft/pdf-engine';
+import { glyphPreservingEdit } from './usePdfExporter';
 
 interface TextEditState {
   objectId: string | null;
@@ -57,6 +58,20 @@ export function useTextEditor() {
     });
 
     obj.setContent(newContent);
+    // C4: Try glyph-level edit first to preserve kerning/ligatures.
+    // Falls back to overlay approach (no formatting preserved) if the
+    // content stream is compressed or the string can't be located.
+    const editedGlyph = glyphPreservingEdit(
+      state.pageIndex,
+      obj.getObjectRef(),
+      originalContent,
+      newContent,
+    );
+    if (!editedGlyph) {
+      // Formatting may not be preserved — the text will be redrawn
+      // via the overlay approach in exportPdfWithChanges()
+      console.info("[C4] Glyph-level edit not possible; using overlay fallback");
+    }
     useDocumentStore.getState().setDirty(true);
     return true;
   }, [pdfDocument, push]);
