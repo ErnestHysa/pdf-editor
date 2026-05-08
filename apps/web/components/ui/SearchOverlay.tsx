@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useDocumentStore, SerializableTextObject } from '@/stores/documentStore';
+import { useSearch } from '@/hooks/useSearch';
 import { cn } from '@/lib/utils';
 
 interface SearchResult {
@@ -25,34 +26,27 @@ export function SearchOverlay() {
 
   const {
     textObjects, setActivePage,
+    searchActiveMatches, searchCurrentMatchIndex,
     setSearchActiveMatches, setSearchCurrentMatchIndex, clearSearch,
   } = useDocumentStore();
 
-  // Search through text objects and find matches
+  const { executeSearch, clearSearch: clearSearchHandler } = useSearch();
+
+  // Derive search results from store's searchActiveMatches + textObjects for display
   const searchResults = useMemo((): SearchResult[] => {
-    if (!query.trim()) return [];
-
-    const results: SearchResult[] = [];
-    const lowerQuery = query.toLowerCase();
-
-    textObjects.forEach((textObj) => {
-      const lowerContent = textObj.content.toLowerCase();
-      let searchStart = 0;
-      let matchIndex;
-
-      while ((matchIndex = lowerContent.indexOf(lowerQuery, searchStart)) !== -1) {
-        results.push({
+    return searchActiveMatches
+      .map((match) => {
+        const textObj = textObjects.find((t) => t.id === match.textObjectId);
+        if (!textObj) return null;
+        return {
           textObject: textObj,
-          matchStart: matchIndex,
-          matchEnd: matchIndex + query.length,
-          matchText: textObj.content.slice(matchIndex, matchIndex + query.length),
-        });
-        searchStart = matchIndex + 1;
-      }
-    });
-
-    return results;
-  }, [textObjects, query]);
+          matchStart: match.matchStart,
+          matchEnd: match.matchEnd,
+          matchText: match.matchText,
+        } as SearchResult;
+      })
+      .filter(Boolean) as SearchResult[];
+  }, [searchActiveMatches, textObjects]);
 
   // Group results by page for display
   const resultsByPage = useMemo(() => {
@@ -91,16 +85,22 @@ export function SearchOverlay() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Call executeSearch when query changes
+  useEffect(() => {
+    if (!query.trim()) return;
+    executeSearch(query);
+  }, [query, executeSearch]);
+
   // Focus input when overlay opens
   useEffect(() => {
     if (open) {
       setQuery('');
       setSelectedIndex(0);
       setHighlightedId(null);
-      clearSearch();
+      clearSearchHandler();
       setTimeout(() => inputRef.current?.focus(), 10);
     }
-  }, [open, clearSearch]);
+  }, [open, clearSearchHandler]);
 
   // Navigate to result
   const navigateToResult = useCallback((result: SearchResult, matchIndex: number) => {

@@ -16,7 +16,7 @@ const HANDLE_SIZE = 10;
 const THUMBNAIL_WIDTH = 160;
 
 export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
-  const { pdfDocument, activePageIndex, forceReload, pdfJsDoc } = useDocumentStore();
+  const { pdfDocument, activePageIndex, forceReload, pdfJsDoc, cropPage } = useDocumentStore();
 
   // Crop state
   const [cropTop, setCropTop] = useState(0);
@@ -175,45 +175,37 @@ export function CropResizeDialog({ open, onClose }: CropResizeDialogProps) {
 
     try {
       const libDoc = pdfDocument.getLibDoc();
-      const pages = libDoc.getPages();
-      const pageCount = libDoc.getPageCount();
+      const page = libDoc.getPage(activePageIndex);
+      const { width: pageWidth, height: pageHeight } = page.getSize();
+
+      // Compute bounding box in DOM coords (top-left origin)
+      const bounds = {
+        x: cropLeft,
+        y: cropTop,
+        width: pageWidth - cropLeft - cropRight,
+        height: pageHeight - cropTop - cropBottom,
+      };
 
       if (cropScope === "current") {
-        const page = pages[activePageIndex];
-        const { height } = page.getSize();
-
-        // Crop box: [left, bottom, right, top] in PDF coordinates (origin bottom-left)
-        const newCropBox = [
-          cropLeft,
-          cropBottom,
-          page.getWidth() - cropRight,
-          height - cropTop,
-        ] as [number, number, number, number];
-
-        page.setCropBox(newCropBox[0], newCropBox[1], newCropBox[2], newCropBox[3]);
+        cropPage(activePageIndex, bounds);
       } else {
         // Apply to all pages
+        const pageCount = libDoc.getPageCount();
         for (let i = 0; i < pageCount; i++) {
-          const page = pages[i];
-          const { height } = page.getSize();
-          const newCropBox = [
-            cropLeft,
-            cropBottom,
-            page.getWidth() - cropRight,
-            height - cropTop,
-          ] as [number, number, number, number];
-          page.setCropBox(newCropBox[0], newCropBox[1], newCropBox[2], newCropBox[3]);
+          const p = libDoc.getPage(i);
+          const { width: w, height: h } = p.getSize();
+          const allBounds = { x: cropLeft, y: cropTop, width: w - cropLeft - cropRight, height: h - cropTop - cropBottom };
+          cropPage(i, allBounds);
         }
       }
 
-      forceReload();
       onClose();
     } catch (err) {
       console.error("Crop failed:", err);
     } finally {
       setIsProcessing(false);
     }
-  }, [pdfDocument, cropScope, activePageIndex, cropTop, cropRight, cropBottom, cropLeft, forceReload, onClose]);
+  }, [pdfDocument, cropScope, activePageIndex, cropTop, cropRight, cropBottom, cropLeft, cropPage, onClose]);
 
   const handleResizeApply = useCallback(async () => {
     if (!pdfDocument) return;

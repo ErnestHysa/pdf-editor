@@ -180,7 +180,7 @@ interface DocumentState {
   duplicatePage: (index: number) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
   rotatePage: (index: number, direction: "left" | "right") => void;
-  cropPage: (index: number) => void;
+  cropPage: (index: number, bounds?: { x: number; y: number; width: number; height: number }) => void;
   insertPagesFromFile: (file: File, afterIndex: number) => Promise<number>;
   // Annotation management (R35-R42)
   addAnnotation: (annotation: AnnotationObject) => void;
@@ -427,13 +427,21 @@ export const useDocumentStore = create<DocumentState>()(
       });
     },
 
-    cropPage: (index) => {
+    cropPage: (index, bounds) => {
       const doc = useDocumentStore.getState().pdfDocument;
       if (!doc) return;
-      // Crop functionality: reset bounding box to current page size (no-op placeholder)
-      // Actual crop UI would be implemented separately with interactive selection
-      const page = doc.getPage(index);
+      const libDoc = doc.getLibDoc();
+      const page = libDoc.getPage(index);
       if (!page) return;
+
+      if (bounds) {
+        // Convert DOM coords (top-left origin) to PDF coords (bottom-left origin)
+        const { width: pageWidth, height: pageHeight } = page.getSize();
+        const pdfX = bounds.x;
+        const pdfY = pageHeight - bounds.y - bounds.height; // Convert Y from top-left to bottom-left
+        page.setCropBox(pdfX, pdfY, bounds.width, bounds.height);
+      }
+
       set((state) => {
         state.isDirty = true;
         state.targetedReloads[index] = Date.now();
