@@ -4,24 +4,32 @@ import { openDB, IDBPDatabase } from "idb";
 import * as pdfjsLib from "pdfjs-dist/legacy";
 
 const DB_NAME = "pagecraft";
-const DB_VERSION = 3; // Bump for recentFiles store
+const DB_VERSION = 4; // Bump for hash-based IDs
 const RECENT_FILES_STORE = "recentFiles";
 
 export interface RecentFile {
-  id: string;
+  hash: string;       // SHA-256 content hash (used as id)
   name: string;
-  lastModified: number;
+  lastOpened: number; // timestamp when file was opened
+  size: number;       // file size in bytes
   pageCount: number;
   pdfData: ArrayBuffer;
-  thumbnail: string; // data URL of first page at 100x140
+  thumbnail: string;  // data URL of first page at 100x140
+}
+
+/** Compute SHA-256 hash of ArrayBuffer using Web Crypto API */
+export async function sha256(buffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function getDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion) {
-      if (oldVersion < 3) {
+      if (oldVersion < 4) {
         if (!db.objectStoreNames.contains(RECENT_FILES_STORE)) {
-          db.createObjectStore(RECENT_FILES_STORE, { keyPath: "id" });
+          db.createObjectStore(RECENT_FILES_STORE, { keyPath: "hash" });
         }
       }
     },
@@ -53,20 +61,22 @@ async function generateThumbnail(pdfData: ArrayBuffer): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.7);
 }
 
-/** Save a file to recentFiles. Overwrites if same id exists. */
+/** Save a file to recentFiles. Uses SHA-256 hash of content as id (overwrites if same content exists). */
 export async function saveRecentFile(
-  id: string,
   name: string,
   pdfData: ArrayBuffer,
-  pageCount: number
+  pageCount: number,
+  size: number
 ): Promise<void> {
   try {
+    const hash = await sha256(pdfData);
     const thumbnail = await generateThumbnail(pdfData);
     const db = await getDb();
     await db.put(RECENT_FILES_STORE, {
-      id,
+      hash,
       name,
-      lastModified: Date.now(),
+      lastOpened: Date.now(),
+      size,
       pageCount,
       pdfData,
       thumbnail,
@@ -76,23 +86,23 @@ export async function saveRecentFile(
   }
 }
 
-/** Get all recent files sorted by lastModified descending */
+/** Get all recent files sorted by lastOpened descending */
 export async function getRecentFiles(): Promise<RecentFile[]> {
   try {
     const db = await getDb();
     const all = (await db.getAll(RECENT_FILES_STORE)) as RecentFile[];
-    return all.sort((a, b) => b.lastModified - a.lastModified);
+    return all.sort((a, b) => b.lastOpened - a.lastOpened);
   } catch (err) {
     console.error("[RecentFiles] getAll failed:", err);
     return [];
   }
 }
 
-/** Delete a specific recent file */
-export async function deleteRecentFile(id: string): Promise<void> {
+/** Delete a specific recent file by its hash */
+export async function deleteRecentFile(hash: string): Promise<void> {
   try {
     const db = await getDb();
-    await db.delete(RECENT_FILES_STORE, id);
+    await db.delete(RECENT_FILES_STORE, hash);
   } catch (err) {
     console.error("[RecentFiles] delete failed:", err);
   }
@@ -126,9 +136,9 @@ export function useRecentFiles() {
     setRecentFiles([]);
   }, []);
 
-  const removeFile = useCallback(async (id: string) => {
-    await deleteRecentFile(id);
-    setRecentFiles((prev) => prev.filter((f) => f.id !== id));
+  const removeFile = useCallback(async (hash: string) => {
+    await deleteRecentFile(hash);
+    setRecentFiles((prev) => prev.filter((f) => f.hash !== hash));
   }, []);
 
   return { recentFiles, clearAll, removeFile, refresh };

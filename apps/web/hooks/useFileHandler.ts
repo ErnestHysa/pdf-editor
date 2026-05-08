@@ -45,10 +45,10 @@ export function useFileHandler() {
 
       // Save to recent files (non-blocking)
       saveRecentFile(
-        `${file.name}-${file.size}`,
         file.name,
         buffer,
-        doc.getPageCount()
+        doc.getPageCount(),
+        file.size
       ).catch(() => {});
     } finally {
       setLoading(false);

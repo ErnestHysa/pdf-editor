@@ -57,7 +57,7 @@ function RecentFileCard({
           </p>
           <div className="flex items-center gap-1 mt-0.5 text-[10px] text-text-secondary">
             <Clock size={9} />
-            <span>{formatDate(file.lastModified)}</span>
+            <span>{formatDate(file.lastOpened)}</span>
             <span className="mx-0.5">·</span>
             <span>{file.pageCount} {file.pageCount === 1 ? "page" : "pages"}</span>
           </div>
@@ -140,12 +140,12 @@ export function EmptyState({ onFile }: EmptyStateProps) {
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
             {recentFiles.map((file) => (
               <RecentFileCard
-                key={file.id}
+                key={file.hash}
                 file={file}
                 onClick={() => loadRecentFile(file)}
                 onRemove={(e) => {
                   e.stopPropagation();
-                  removeFile(file.id);
+                  removeFile(file.hash);
                 }}
               />
             ))}
