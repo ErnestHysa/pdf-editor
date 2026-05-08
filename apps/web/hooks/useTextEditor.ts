@@ -25,12 +25,6 @@ export function useTextEditor() {
     if (!state || !pdfDocument) return false;
     editStateRef.current = null;
 
-    const page = pdfDocument.getPage(state.pageIndex);
-    if (!page) return false;
-
-    const obj = page.getObjects().texts.find((t: any) => t.getId() === state.objectId);
-    if (!obj) return false;
-
     if (newContent === state.originalContent) return false;
 
     const originalContent = state.originalContent;
@@ -44,25 +38,28 @@ export function useTextEditor() {
       type: 'text-edit',
       previousContent: originalContent,
       newContent,
-      objectData: { content: newContent, objectRef: obj.getObjectRef() },
+      objectData: { content: newContent, objectId },
     });
 
-    obj.setContent(newContent);
-    // C4: Try glyph-level edit first to preserve kerning/ligatures.
-    // Falls back to overlay approach (no formatting preserved) if the
-    // content stream is compressed or the string can't be located.
-    const editedGlyph = glyphPreservingEdit(
-      state.pageIndex,
-      obj.getObjectRef(),
-      originalContent,
-      newContent,
-    );
-    if (!editedGlyph) {
-      // Formatting may not be preserved — the text will be redrawn
-      // via the overlay approach in exportPdfWithChanges()
-      console.info("[C4] Glyph-level edit not possible; using overlay fallback");
+    // Update Zustand overlay — the overlay approach is the primary editing
+    // mechanism. The engine's texts array (page.getObjects().texts) may not
+    // be populated from PdfParser, so we use the Zustand textObjects path.
+    const store = useDocumentStore.getState();
+    if (objectId) {
+      const existing = store.textObjects.find(t => t.id === objectId);
+      if (existing) {
+        store.updateTextObject(objectId, { content: newContent });
+      } else {
+        // No matching overlay object — fall back to engine direct edit
+        const page = pdfDocument.getPage(pageIndex);
+        const obj = page?.getObjects().texts.find((t: any) => t.getId() === objectId);
+        if (obj) {
+          obj.setContent(newContent);
+          glyphPreservingEdit(pageIndex, obj.getObjectRef(), originalContent, newContent);
+        }
+      }
     }
-    useDocumentStore.getState().setDirty(true);
+    store.setDirty(true);
     return true;
   }, [pdfDocument, push]);
 
