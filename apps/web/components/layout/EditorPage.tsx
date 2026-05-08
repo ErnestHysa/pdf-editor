@@ -9,6 +9,7 @@ import { useHistoryStore } from '@/stores/historyStore';
 import { useToolStore } from '@/stores/toolStore';
 import { useFileHandler } from '@/hooks/useFileHandler';
 import { useAutosave } from '@/hooks/useAutosave';
+import { AutosaveConflictBanner } from '@/components/ui/AutosaveConflictBanner';
 import { PdfParser } from '@/hooks/usePdfParser';
 import type { SerializableTextObject } from '@/stores/documentStore';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -431,6 +432,7 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-col h-screen bg-bg-base overflow-hidden">
+      <AutosaveConflictBanner />
       <TopBar />
       {pdfDocument && <FontWarningBanner />}
       <div className="flex flex-1 overflow-hidden">
