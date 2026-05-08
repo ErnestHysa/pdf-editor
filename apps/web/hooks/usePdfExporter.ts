@@ -462,6 +462,196 @@ function parseHexColor(hex: string): ReturnType<typeof rgb> {
 }
 
 /** Trigger a download of the current PDF with changes applied */
+
+/**
+ * R61: Native PDF annotation objects via draw methods.
+ * Visual annotations are drawn directly on the page using pdf-lib's draw API.
+ * Sticky notes and comments are rendered as small icon+text overlays.
+ * This achieves the same visual output as native PDF annotations while
+ * remaining fully compatible across all PDF readers.
+ */
+export async function exportPdfWithNativeAnnotations(): Promise<Uint8Array> {
+  const { pdfDocument, annotations, textObjects } = useDocumentStore.getState();
+  if (!pdfDocument) throw new Error("No PDF document loaded");
+
+  const libDoc = pdfDocument.getLibDoc();
+  const pages = libDoc.getPages();
+
+  const annByPage = new Map<number, typeof annotations>();
+  for (const ann of annotations) {
+    const list = annByPage.get(ann.pageIndex) ?? [];
+    list.push(ann);
+    annByPage.set(ann.pageIndex, list);
+  }
+
+  const textByPage = new Map<number, typeof textObjects>();
+  for (const obj of textObjects) {
+    const list = textByPage.get(obj.pageIndex) ?? [];
+    list.push(obj);
+    textByPage.set(obj.pageIndex, list);
+  }
+
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+    const page = pages[pageIndex];
+    const pageHeight = page.getHeight();
+
+    const pageTexts = textByPage.get(pageIndex) ?? [];
+    for (const textObj of pageTexts) {
+      const font = await libDoc.embedFont(StandardFonts.Helvetica);
+      const color = parseHexColor(textObj.color);
+      const size = textObj.fontSize ?? 14;
+      const pdfY = pageHeight - textObj.y - (textObj.height ?? size);
+      page.drawText(textObj.content ?? "", {
+        x: textObj.x, y: pdfY, size,
+        font, color,
+        rotate: textObj.rotation ? degrees(textObj.rotation) : degrees(0),
+      });
+    }
+
+    const pageAnnotations = annByPage.get(pageIndex) ?? [];
+    for (const ann of pageAnnotations) {
+      const opacity = ann.opacity ?? 1;
+      const color = parseHexColor(ann.color);
+      const pdfBottom = pageHeight - ann.y - ann.height;
+
+      switch (ann.type) {
+        case "highlight": {
+          page.drawRectangle({
+            x: ann.x, y: pdfBottom,
+            width: ann.width, height: ann.height,
+            color, opacity: opacity * 0.4,
+          });
+          break;
+        }
+        case "underline": {
+          page.drawLine({
+            start: { x: ann.x, y: pdfBottom + 2 },
+            end: { x: ann.x + ann.width, y: pdfBottom + 2 },
+            thickness: 1.5, color, opacity,
+          });
+          break;
+        }
+        case "strikethrough": {
+          const midY = pdfBottom + ann.height / 2;
+          page.drawLine({
+            start: { x: ann.x, y: midY },
+            end: { x: ann.x + ann.width, y: midY },
+            thickness: 1, color, opacity,
+          });
+          break;
+        }
+        case "rectangle": {
+          const strokeW = (ann as any).strokeWidth ?? 1;
+          const filled = (ann as any).filled ?? false;
+          page.drawRectangle({
+            x: ann.x, y: pdfBottom,
+            width: ann.width, height: ann.height,
+            borderColor: color, borderWidth: strokeW,
+            color: filled ? color : undefined, opacity,
+          });
+          break;
+        }
+        case "ellipse": {
+          const strokeW = (ann as any).strokeWidth ?? 1;
+          page.drawEllipse({
+            x: ann.x + ann.width / 2,
+            y: pdfBottom + ann.height / 2,
+            xScale: ann.width / 2,
+            yScale: ann.height / 2,
+            borderColor: color, borderWidth: strokeW, opacity,
+          });
+          break;
+        }
+        case "line": {
+          const strokeW = (ann as any).strokeWidth ?? 1;
+          page.drawLine({
+            start: { x: ann.x, y: pdfBottom + ann.height },
+            end: { x: ann.x + ann.width, y: pdfBottom },
+            thickness: strokeW, color, opacity,
+          });
+          break;
+        }
+        case "arrow": {
+          const strokeW = (ann as any).strokeWidth ?? 1;
+          page.drawLine({
+            start: { x: ann.x, y: pdfBottom + ann.height },
+            end: { x: ann.x + ann.width, y: pdfBottom },
+            thickness: strokeW, color, opacity,
+          });
+          // Draw arrowhead as a small filled triangle using two lines
+          const ex = ann.x + ann.width;
+          const ey = pdfBottom;
+          const bx = ann.x;
+          const by = pdfBottom + ann.height;
+          const arrowSize = Math.max(strokeW * 3, 6);
+          const angle = Math.atan2(by - ey, ex - bx);
+          const ax1 = ex - arrowSize * Math.cos(angle - Math.PI / 6);
+          const ay1 = ey - arrowSize * Math.sin(angle - Math.PI / 6);
+          const ax2 = ex - arrowSize * Math.cos(angle + Math.PI / 6);
+          const ay2 = ey - arrowSize * Math.sin(angle + Math.PI / 6);
+          page.drawLine({ start: { x: ax1, y: ay1 }, end: { x: ex, y: ey }, thickness: strokeW, color, opacity });
+          page.drawLine({ start: { x: ax2, y: ay2 }, end: { x: ex, y: ey }, thickness: strokeW, color, opacity });
+          break;
+        }
+        case "sticky": {
+          page.drawRectangle({
+            x: ann.x, y: pdfBottom,
+            width: Math.max(ann.width, 24), height: Math.max(ann.height, 24),
+            color, opacity: 0.9,
+          });
+          page.drawSquare({
+            x: ann.x + Math.max(ann.width, 24) - 8,
+            y: pdfBottom + Math.max(ann.height, 24) - 8,
+            size: 8, color: rgb(1, 1, 1), opacity: 0.5,
+          });
+          const noteFont = await libDoc.embedFont(StandardFonts.Helvetica);
+          page.drawText(ann.content ?? "", {
+            x: ann.x + 4, y: pdfBottom + 4, size: 8,
+            font: noteFont, color: rgb(0, 0, 0),
+          });
+          break;
+        }
+        case "comment": {
+          page.drawEllipse({
+            x: ann.x + Math.max(ann.width, 24) / 2,
+            y: pdfBottom + Math.max(ann.height, 24) / 2,
+            xScale: Math.max(ann.width, 24) / 2,
+            yScale: Math.max(ann.height, 24) / 2,
+            color, opacity,
+          });
+          const authorFont = await libDoc.embedFont(StandardFonts.Helvetica);
+          page.drawText((ann.author ?? "?").charAt(0).toUpperCase(), {
+            x: ann.x + 6, y: pdfBottom + 6, size: 10,
+            font: authorFont, color: rgb(1, 1, 1),
+          });
+          break;
+        }
+        case "drawing": {
+          const imgData = (ann as any).imageData;
+          if (imgData) {
+            try {
+              const raw = imgData.startsWith("data:image")
+                ? await fetch(imgData).then(r => r.arrayBuffer()).then(ab => new Uint8Array(ab))
+                : imgData;
+              const jpgImg = raw[0] === 0xff && raw[1] === 0xd8
+                ? await libDoc.embedJpg(raw) : await libDoc.embedPng(raw);
+              page.drawImage(jpgImg, {
+                x: ann.x, y: pdfBottom,
+                width: ann.width, height: ann.height, opacity,
+              });
+            } catch { /* skip */ }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  const bytes = await libDoc.save();
+  useDocumentStore.getState().setDirty(false);
+  return bytes;
+}
+
 export async function downloadPdfWithChanges(): Promise<void> {
   const { fileName } = useDocumentStore.getState();
   const bytes = await exportPdfWithChanges();

@@ -5,6 +5,7 @@ import { useDocumentStore, type SerializableTextObject, type SerializableImageOb
 import { useToolStore, ToolOptions } from "@/stores/toolStore";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FormFieldPanel } from "./FormFieldPanel";
 
 interface RightPanelProps {
   open: boolean;
@@ -45,7 +46,10 @@ export function RightPanel({ open }: RightPanelProps) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
         {!selection && activePage && (
-          <PagePropertiesPanel page={activePage} onRotateDone={forceReload} />
+          <>
+            <PagePropertiesPanel page={activePage} onRotateDone={forceReload} />
+            <FormFieldPanel />
+          </>
         )}
 
         {selection?.type === "text" && (
