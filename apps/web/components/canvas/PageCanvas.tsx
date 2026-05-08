@@ -845,11 +845,22 @@ function getBoundingBoxOfPoints(points: Array<{ x: number; y: number }>): {
   if (points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
   const xs = points.map((p: any) => p.x);
   const ys = points.map((p: any) => p.y);
-  return {
-    x: Math.min(...xs), y: Math.min(...ys),
-    width: Math.max(...xs) - Math.min(...xs),
-    height: Math.max(...ys) - Math.min(...ys),
-  };
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  let width = Math.max(...xs) - minX;
+  let height = Math.max(...ys) - minY;
+  // Ensure minimum 4x4 box for single-point strokes
+  if (width < 2 && height < 2) {
+    const pt = points[0];
+    return { x: pt.x - 2, y: pt.y - 2, width: 4, height: 4 };
+  }
+  if (width < 2) {
+    width = 4;
+  }
+  if (height < 2) {
+    height = 4;
+  }
+  return { x: minX, y: minY, width, height };
 }
 
 // re-export the Zustand helper types for convenience

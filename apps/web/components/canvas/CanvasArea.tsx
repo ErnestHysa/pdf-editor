@@ -27,10 +27,24 @@ export function CanvasArea({ className }: CanvasAreaProps) {
   const handleWheel: React.WheelEventHandler<HTMLDivElement> = useCallback((e) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // Cursor position in page coordinates BEFORE zoom
+      const cursorX = (e.clientX - rect.left - panOffset.x) / zoom;
+      const cursorY = (e.clientY - rect.top - panOffset.y) / zoom;
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom(Math.min(Math.max(zoom + delta, 0.25), 4.0));
+      const newZoom = Math.min(Math.max(zoom + delta, 0.25), 4.0);
+      setZoom(newZoom);
+      // Cursor position in page coordinates AFTER zoom
+      const newCursorX = (e.clientX - rect.left - panOffset.x) / newZoom;
+      const newCursorY = (e.clientY - rect.top - panOffset.y) / newZoom;
+      // Adjust panOffset to keep cursor at same page position
+      setPanOffset({
+        x: panOffset.x - (newCursorX - cursorX) * newZoom,
+        y: panOffset.y - (newCursorY - cursorY) * newZoom,
+      });
     }
-  }, [zoom, setZoom]);
+  }, [zoom, panOffset, setZoom, setPanOffset]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && !isDrawing)) {

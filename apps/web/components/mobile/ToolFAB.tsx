@@ -38,9 +38,7 @@ export function ToolFAB() {
   const handleToolSelect = (toolId: typeof activeTool) => {
     setTool(toolId);
     setExpanded(false);
-    if (toolId !== 'select') {
-      setMobileBottomSheet(true, 'tool-options');
-    }
+    setMobileBottomSheet(false);
   };
 
   return (

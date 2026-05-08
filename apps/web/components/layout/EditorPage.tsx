@@ -409,8 +409,8 @@ export function EditorPage() {
     }
   }, []);
 
-  // ── Virtualization: only render active page ± 2 buffer pages ─────
-  const VIRTUAL_BUFFER = 2;
+  // ── Virtualization: only render active page ± buffer pages ─────
+  const VIRTUAL_BUFFER = 3;
   const pages = pdfDocument ? pdfDocument.getPages() : [];
   const totalPages = pages.length;
   const virtualIndexes = Array.from(
@@ -480,13 +480,13 @@ export function EditorPage() {
               transformOrigin: 'top center',
             }}
           >
-            {(pages as any[]).map((page: any, i: number) => (
+            {virtualIndexes.map((i) => (
               <ErrorBoundary key={i} pageIndex={i}>
                 <div
                   ref={(el) => { pageRefs.current[i] = el; }}
                 >
                   <PageCanvas
-                    page={page}
+                    page={pages[i]}
                     pageIndex={i}
                     isActive={i === activePageIndex}
                     onPageClick={() => setActivePage(i)}

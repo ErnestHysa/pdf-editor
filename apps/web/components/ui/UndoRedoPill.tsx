@@ -77,7 +77,7 @@ export function UndoRedoPill() {
             'animate-in slide-in-from-bottom-4 fade-in duration-200'
           )}
         >
-          <span className="text-xs text-secondary font-mono truncate max-w-[120px]">
+          <span className="text-xs text-secondary font-mono truncate max-w-[180px] whitespace-normal">
             {lastLabel ?? 'Action'}
           </span>
           <div className="flex items-center gap-1">

@@ -115,12 +115,12 @@ export class PdfParser {
   }
 
   async parseAllPages(): Promise<Map<number, ParsedTextObject[]>> {
-    const result = new Map<number, ParsedTextObject[]>();
-    for (let i = 0; i < this.pdfDoc.numPages; i++) {
-      const objects = await this.parsePage(i);
-      result.set(i, objects);
-    }
-    return result;
+    const pageCount = this.pdfDoc.numPages;
+    const promises = Array.from({ length: pageCount }, (_, i) => this.parsePage(i));
+    const results = await Promise.all(promises);
+    const map = new Map<number, ParsedTextObject[]>();
+    results.forEach((objects, i) => map.set(i, objects));
+    return map;
   }
 
   getPageDimensions(pageIndex: number): { width: number; height: number } {

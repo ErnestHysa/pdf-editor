@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useToolStore } from '@/stores/toolStore';
@@ -105,5 +105,4 @@ export function MobileBottomSheet() {
   );
 }
 
-// We need useState imported
-import { useState } from 'react';
+
