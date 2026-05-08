@@ -167,7 +167,8 @@ export const PageCanvas = memo(function PageCanvas({
         content: '',
       };
       useHistoryStore.getState().push({
-        label: 'Add sticky note',
+        label: 'Add sticky note', description: 'Add sticky note',
+        targetIds: [id],
         undo: () => useDocumentStore.getState().removeAnnotation(id),
         redo: () => useDocumentStore.getState().addAnnotation(newSticky),
       });
@@ -185,7 +186,8 @@ export const PageCanvas = memo(function PageCanvas({
         content: '', author: 'You', timestamp: Date.now(),
       };
       useHistoryStore.getState().push({
-        label: 'Add comment',
+        label: 'Add comment', description: 'Add comment',
+        targetIds: [id],
         undo: () => useDocumentStore.getState().removeAnnotation(id),
         redo: () => useDocumentStore.getState().addAnnotation(newComment),
       });
@@ -202,7 +204,8 @@ export const PageCanvas = memo(function PageCanvas({
         color: toolOptions.color, opacity: toolOptions.opacity,
       };
       useHistoryStore.getState().push({
-        label: `Add ${activeTool}`,
+        label: `Add ${activeTool}`, description: `Add ${activeTool}`,
+        targetIds: [id],
         undo: () => useDocumentStore.getState().removeAnnotation(id),
         redo: () => useDocumentStore.getState().addAnnotation(newMark),
       });
@@ -225,7 +228,8 @@ export const PageCanvas = memo(function PageCanvas({
         rotation: 0, objectRef: 'new',
       };
       useHistoryStore.getState().push({
-        label: 'Add text',
+        label: 'Add text', description: 'Add text',
+        targetIds: [id],
         undo: () => useDocumentStore.getState().removeTextObject(id),
         redo: () => useDocumentStore.getState().addTextObject(newObj),
       });
@@ -248,7 +252,8 @@ export const PageCanvas = memo(function PageCanvas({
           const id = `img-${Date.now()}`;
           const newObj = { id, pageIndex, x: pos.x, y: pos.y, width: 200, height: 150, src, opacity: 1, rotation: 0 };
           useHistoryStore.getState().push({
-            label: 'Add image',
+            label: 'Add image', description: 'Add image',
+            targetIds: [id],
             undo: () => useDocumentStore.getState().removeImageObject(id),
             redo: () => useDocumentStore.getState().addImageObject(newObj),
           });
@@ -323,7 +328,8 @@ export const PageCanvas = memo(function PageCanvas({
         imageData,
       };
       useHistoryStore.getState().push({
-        label: 'Draw stroke',
+        label: 'Draw stroke', description: 'Draw stroke',
+        targetIds: [id],
         undo: () => useDocumentStore.getState().removeAnnotation(id),
         redo: () => useDocumentStore.getState().addAnnotation(newAnnotation),
       });
@@ -346,7 +352,8 @@ export const PageCanvas = memo(function PageCanvas({
         strokeWidth: toolOptions.strokeWidth ?? 2,
       };
       useHistoryStore.getState().push({
-        label: `Add ${activeTool}`,
+        label: `Add ${activeTool}`, description: `Add ${activeTool}`,
+        targetIds: [id],
         undo: () => useDocumentStore.getState().removeAnnotation(id),
         redo: () => useDocumentStore.getState().addAnnotation(newAnn),
       });
@@ -486,7 +493,8 @@ export const PageCanvas = memo(function PageCanvas({
                   onSave={(newContent) => {
                     const oldContent = textObj.content;
                     useHistoryStore.getState().push({
-                      label: 'Edit text',
+                      label: 'Edit text', description: 'Edit text',
+                      targetIds: [textObj.id],
                       undo: () => useDocumentStore.getState().updateTextObject(textObj.id, { content: oldContent }),
                       redo: () => useDocumentStore.getState().updateTextObject(textObj.id, { content: newContent }),
                     });

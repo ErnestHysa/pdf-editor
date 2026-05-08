@@ -38,7 +38,8 @@ export function useTextEditor() {
 
     // Push to history before committing
     push({
-      label: `Edited text`,
+      label: `Edited text`, description: 'Edit text',
+      targetIds: objectId ? [objectId] : [],
       undo: () => {
         const p = pdfDocument.getPage(pageIndex);
         if (!p) return;

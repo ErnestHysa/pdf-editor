@@ -211,7 +211,8 @@ export function EditorPage() {
     if (toRemoveText.length > 0) {
       const removed = [...toRemoveText];
       useHistoryStore.getState().push({
-        label: 'Delete text',
+        label: 'Delete text', description: 'Delete text',
+        targetIds: removed.map((obj) => obj.id),
         undo: () => removed.forEach((obj) => useDocumentStore.getState().addTextObject(obj)),
         redo: () => removed.forEach((obj) => useDocumentStore.getState().removeTextObject(obj.id)),
       });
@@ -222,7 +223,8 @@ export function EditorPage() {
     if (toRemoveImgs.length > 0) {
       const removedImgs = [...toRemoveImgs];
       useHistoryStore.getState().push({
-        label: 'Delete image',
+        label: 'Delete image', description: 'Delete image',
+        targetIds: removedImgs.map((obj) => obj.id),
         undo: () => removedImgs.forEach((obj) => {
           const img = useDocumentStore.getState().imageObjects.find((i) => i.id === obj.id);
           if (img) addImageObject(img);
@@ -236,12 +238,13 @@ export function EditorPage() {
     if (toRemoveAnns.length > 0) {
       const removedAnns = [...toRemoveAnns];
       useHistoryStore.getState().push({
-        label: 'Delete annotation',
+        label: 'Delete annotation', description: 'Delete annotation',
+        targetIds: removedAnns.map((obj) => obj.id),
         undo: () => removedAnns.forEach((obj) => {
           const ann = useDocumentStore.getState().annotations.find((a) => a.id === obj.id);
           if (ann) addAnnotation(ann);
         }),
-        redo: () => removedAnns.forEach((obj) => removeAnnotation(obj.id)),
+        redo: () => toRemoveAnns.forEach((obj) => removeAnnotation(obj.id)),
       });
       toRemoveAnns.forEach((obj) => removeAnnotation(obj.id));
     }
