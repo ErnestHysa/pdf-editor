@@ -83,6 +83,27 @@ export class PdfDocument {
   }
 
   /**
+   * Create a PdfDocument from an ArrayBuffer (e.g., from a file).
+   */
+  static async loadFromArrayBuffer(buffer: ArrayBuffer): Promise<PdfDocument> {
+    const pdfLibDoc = await PDFDocument.load(buffer, {
+      ignoreEncryption: true,
+      updateMetadata: false,
+    });
+    return new PdfDocument(pdfLibDoc);
+  }
+
+  /**
+   * Insert pages from a File at a given position.
+   * Returns the number of pages inserted.
+   */
+  async insertPagesFromFile(file: File, afterIndex: number): Promise<number> {
+    const buffer = await file.arrayBuffer();
+    const sourceDoc = await PdfDocument.loadFromArrayBuffer(buffer);
+    return this.insertPagesFromDocument(sourceDoc, afterIndex);
+  }
+
+  /**
    * Insert pages from another PdfDocument at a given position.
    * Returns the number of pages inserted.
    */

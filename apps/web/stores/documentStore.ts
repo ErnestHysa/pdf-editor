@@ -168,6 +168,8 @@ interface DocumentState {
   forceReload: () => void;
   addPartialReload: (pageIndex: number) => void;
   setTextObjects: (objects: SerializableTextObject[]) => void;
+  setImageObjects: (objects: SerializableImageObject[]) => void;
+  setAnnotations: (annotations: AnnotationObject[]) => void;
   addTextObject: (obj: SerializableTextObject) => void;
   removeTextObject: (id: string) => void;
   updateTextObject: (id: string, updates: Partial<SerializableTextObject>) => void;
@@ -292,6 +294,14 @@ export const useDocumentStore = create<DocumentState>()(
     setTextObjects: (objects) =>
       set((state) => {
         state.textObjects = objects;
+      }),
+    setImageObjects: (objects: SerializableImageObject[]) =>
+      set((state) => {
+        state.imageObjects = objects;
+      }),
+    setAnnotations: (annotations: AnnotationObject[]) =>
+      set((state) => {
+        state.annotations = annotations;
       }),
     addTextObject: (obj) =>
       set((state) => {
@@ -448,31 +458,12 @@ export const useDocumentStore = create<DocumentState>()(
       });
     },
 
-    insertPagesFromFile: async (file, afterIndex) => {
-      const { PDFDocument } = await import('pdf-lib');
-      const buffer = await file.arrayBuffer();
-      const sourceDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+    insertPagesFromFile: async (file: File, afterIndex: number): Promise<number> => {
       const doc = useDocumentStore.getState().pdfDocument;
       if (!doc) return 0;
 
-      const sourcePages = sourceDoc.getPages();
-      const count = sourcePages.length;
+      const count: number = await doc.insertPagesFromFile(file, afterIndex);
       if (count === 0) return 0;
-
-      // Use pdf-lib's copyPages to copy from source into our doc
-      const libDoc = doc.getLibDoc();
-      const indices = sourcePages.map((_, i) => i);
-      const copiedPages = await libDoc.copyPages(sourceDoc, indices);
-
-      // Insert each copied page
-      for (let i = 0; i < copiedPages.length; i++) {
-        const insertAt = Math.min(afterIndex + 1 + i, doc.getPageCount());
-        libDoc.addPage(copiedPages[i]);
-        // Also track in our pages array - we need to get the new Page wrapper
-        // Since addPage adds to the end in pdf-lib, we rebuild the pages array
-        // Actually, pdf-lib's addPage adds to end. For proper ordering, we'd need
-        // to rebuild the whole doc. For now, let's just add to end and re-order.
-      }
 
       set((state) => {
         state.isDirty = true;
@@ -481,15 +472,15 @@ export const useDocumentStore = create<DocumentState>()(
       return count;
     },
     // ── Annotation management (R35-R42) ──────────────────────────
-    addAnnotation: (annotation) =>
+    addAnnotation: (annotation: AnnotationObject) =>
       set((state) => {
         state.annotations.push(annotation);
         state.isDirty = true;
       }),
-    removeAnnotation: (id) =>
+    removeAnnotation: (id: string) =>
       set((state) => {
-        state.annotations = state.annotations.filter((a) => a.id !== id);
-        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
+        state.annotations = state.annotations.filter((a: AnnotationObject) => a.id !== id);
+        state.selectedObjects = state.selectedObjects.filter((o: SelectedObject) => o.id !== id);
         state.isDirty = true;
       }),
     updateAnnotation: (id, updates) =>

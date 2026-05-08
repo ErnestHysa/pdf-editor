@@ -7,9 +7,10 @@ import { exportPdfWithChanges } from "./usePdfExporter";
 import { AUTOSAVE_DELAY_MS } from "@/lib/constants";
 
 const DB_NAME = "pagecraft";
-const DB_VERSION = 3; // Bump version; useAutosave + useRecentFiles both touch schema
+const DB_VERSION = 4; // Bump version; adds overlay store for Zustand-only objects
 const STORE_NAME = "documents";
 const HISTORY_STORE_NAME = "history";
+const OVERLAY_STORE_NAME = "overlay";
 const BROADCAST_CHANNEL_NAME = "pagecraft-documents";
 
 interface SavedDocument {
@@ -39,6 +40,12 @@ async function getDb(): Promise<IDBPDatabase> {
         // Version 3 adds history store
         if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
           db.createObjectStore(HISTORY_STORE_NAME, { keyPath: "docId" });
+        }
+      }
+      if (oldVersion < 4) {
+        // Version 4 adds overlay store for Zustand-only objects
+        if (!db.objectStoreNames.contains(OVERLAY_STORE_NAME)) {
+          db.createObjectStore(OVERLAY_STORE_NAME, { keyPath: "docId" });
         }
       }
     },
@@ -107,6 +114,9 @@ export function useAutosave() {
         const docId = fileName ?? "unknown";
         const snapshot = useHistoryStore.getState().getSnapshot();
         await saveHistory(docId, snapshot);
+
+        // Also save overlay state (Zustand-only objects) for safety net
+        await saveOverlayState(docId);
       } catch (err) {
         console.error("[Autosave] failed:", err);
         setSaveStatus('offline');
@@ -303,5 +313,58 @@ export async function deleteHistory(docId: string): Promise<void> {
     await db.delete(HISTORY_STORE_NAME, historyKey(docId));
   } catch (err) {
     console.error("[Autosave] deleteHistory failed:", err);
+  }
+}
+
+// ── Overlay state persistence ───────────────────────────────────
+
+interface OverlayState {
+  textObjects: import("@/stores/documentStore").SerializableTextObject[];
+  imageObjects: import("@/stores/documentStore").SerializableImageObject[];
+  annotations: import("@/stores/documentStore").AnnotationObject[];
+  formFieldValues: Record<string, string | boolean>;
+  pendingSignature: { dataUrl: string; width: number; height: number } | null;
+}
+
+/** Save the current Zustand overlay state to IndexedDB */
+export async function saveOverlayState(docId: string): Promise<void> {
+  try {
+    const state = useDocumentStore.getState();
+    const overlay: OverlayState = {
+      textObjects: state.textObjects,
+      imageObjects: state.imageObjects,
+      annotations: state.annotations,
+      formFieldValues: state.formFieldValues,
+      pendingSignature: state.pendingSignature,
+    };
+    const db = await getDb();
+    await db.put(OVERLAY_STORE_NAME, { docId, ...overlay }, docId);
+    console.debug("[Autosave] overlay saved for doc:", docId);
+  } catch (err) {
+    console.error("[Autosave] saveOverlayState failed:", err);
+  }
+}
+
+/** Load overlay state from IndexedDB */
+export async function loadOverlayState(
+  docId: string
+): Promise<OverlayState | null> {
+  try {
+    const db = await getDb();
+    const saved = await db.get(OVERLAY_STORE_NAME, docId);
+    return saved ?? null;
+  } catch (err) {
+    console.error("[Autosave] loadOverlayState failed:", err);
+    return null;
+  }
+}
+
+/** Delete saved overlay state for a document */
+export async function deleteOverlayState(docId: string): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.delete(OVERLAY_STORE_NAME, docId);
+  } catch (err) {
+    console.error("[Autosave] deleteOverlayState failed:", err);
   }
 }

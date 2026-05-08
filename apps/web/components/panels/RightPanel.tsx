@@ -25,7 +25,7 @@ export function RightPanel({ open }: RightPanelProps) {
 
   // Find the selected image object from Zustand (for user-added images)
   const selectedImageObj = selection?.type === 'image'
-    ? imageObjects.find((o) => o.id === selection.id)
+    ? imageObjects.find((o: any) => o.id === selection.id)
     : undefined;
 
   return (
@@ -56,8 +56,8 @@ export function RightPanel({ open }: RightPanelProps) {
         {selection?.type === "text" && (
           <TextPropertiesPanel
             selectedObject={
-              selectedObjects.find((o) => o.id === selection.id && o.type === "text")
-                ? textObjects.find((o) => o.id === selection.id)
+              selectedObjects.find((o: any) => o.id === selection.id && o.type === "text")
+                ? textObjects.find((o: any) => o.id === selection.id)
                 : undefined
             }
             onStyleChange={(updates) => {

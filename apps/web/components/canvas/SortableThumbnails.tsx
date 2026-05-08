@@ -65,7 +65,7 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
 
   // Store actions
   const { duplicatePage, deletePage, rotatePage, cropPage } = useDocumentStore();
-  const pageCount = useDocumentStore((s) => s.pdfDocument?.getPageCount() ?? 0);
+  const pageCount = useDocumentStore((s) => s.pdfDocument?.getPageCount() ?? 0) as number;
   const canDelete = pageCount > 1;
 
   // Context menu handlers

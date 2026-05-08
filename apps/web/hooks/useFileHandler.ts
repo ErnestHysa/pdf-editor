@@ -5,7 +5,7 @@ import { useDocumentStore } from '@/stores/documentStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { saveRecentFile } from '@/hooks/useRecentFiles';
-import { loadHistory } from '@/hooks/useAutosave';
+import { loadHistory, loadOverlayState } from '@/hooks/useAutosave';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -41,6 +41,20 @@ export function useFileHandler() {
       if (snapshot) {
         useHistoryStore.getState().hydrateHistory(snapshot);
         console.debug("[FileHandler] history restored for:", docId);
+      }
+
+      // Restore overlay state (Zustand-only objects) from IndexedDB
+      const overlay = await loadOverlayState(docId);
+      if (overlay) {
+        const { setTextObjects, setImageObjects, setAnnotations, updateFormFieldValue, setPendingSignature } = useDocumentStore.getState();
+        if (overlay.textObjects.length) setTextObjects(overlay.textObjects);
+        if (overlay.imageObjects.length) setImageObjects(overlay.imageObjects);
+        if (overlay.annotations.length) setAnnotations(overlay.annotations);
+        for (const [field, value] of Object.entries(overlay.formFieldValues)) {
+          updateFormFieldValue(field, value);
+        }
+        if (overlay.pendingSignature) setPendingSignature(overlay.pendingSignature);
+        console.debug("[FileHandler] overlay restored for:", docId);
       }
 
       // Save to recent files (non-blocking)

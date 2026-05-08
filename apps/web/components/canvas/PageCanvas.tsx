@@ -2,6 +2,7 @@
 import { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { Page } from '@pagecraft/pdf-engine';
 import { useDocumentStore } from '@/stores/documentStore';
+import { useUIStore } from '@/stores/uiStore';
 import { useToolStore } from '@/stores/toolStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { TextEditOverlay } from './TextEditOverlay';
@@ -18,6 +19,20 @@ interface PageCanvasProps {
   zoom: number;
   isGesturing?: boolean;
   onLongPress?: (x: number, y: number) => void;
+}
+
+// ── Viewport culling ──────────────────────────────────────────────
+// Returns true if two rects intersect (in page coordinates)
+function rectsIntersect(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number }
+): boolean {
+  return !(
+    a.x + a.width < b.x ||
+    b.x + b.width < a.x ||
+    a.y + a.height < b.y ||
+    b.y + b.height < a.y
+  );
 }
 
 // ── PageCanvas ────────────────────────────────────────────────────
@@ -54,9 +69,56 @@ export const PageCanvas = memo(function PageCanvas({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [commentInput, setCommentInput] = useState('');
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [viewportRect, setViewportRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  const { panOffset } = useUIStore();
 
   const drawingPointsRef = useRef<Array<{ x: number; y: number }>>([]);
   const renderScale = zoom;
+
+  // ── Viewport culling: compute visible rect from scroll container ─
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateViewport = () => {
+      const scrollEl = container.parentElement;
+      if (!scrollEl) return;
+      const scrollTop = scrollEl.scrollTop;
+      const scrollLeft = scrollEl.scrollLeft;
+      const clientWidth = scrollEl.clientWidth;
+      const clientHeight = scrollEl.clientHeight;
+      // Convert screen coords to page coords by subtracting panOffset and dividing by zoom
+      const visX = (scrollLeft - panOffset.x) / zoom;
+      const visY = (scrollTop - panOffset.y) / zoom;
+      const visW = clientWidth / zoom;
+      const visH = clientHeight / zoom;
+      setViewportRect({ x: visX, y: visY, width: visW, height: visH });
+    };
+
+    updateViewport();
+
+    const scrollEl = container.parentElement;
+    if (!scrollEl) return;
+    scrollEl.addEventListener('scroll', updateViewport, { passive: true });
+    window.addEventListener('resize', updateViewport, { passive: true });
+    return () => {
+      scrollEl.removeEventListener('scroll', updateViewport);
+      window.removeEventListener('resize', updateViewport);
+    };
+  }, [zoom, panOffset]);
+
+  // Returns true if an object at (objX, objY) with size (objW, objH) is visible
+  const isObjectVisible = useCallback(
+    (objX: number, objY: number, objW: number, objH: number) => {
+      if (!viewportRect) return true; // default to visible if viewport not yet known
+      return rectsIntersect(
+        { x: objX, y: objY, width: objW, height: objH },
+        viewportRect
+      );
+    },
+    [viewportRect]
+  );
 
   // ── Long-press detection refs ──────────────────────────────────────
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,9 +129,9 @@ export const PageCanvas = memo(function PageCanvas({
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
   const pageObjects = page.getObjects();
-  const pageTextObjects = textObjects.filter((o) => o.pageIndex === pageIndex);
-  const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex);
-  const pageSelected = selectedObjects.filter((o) => o.pageIndex === pageIndex);
+  const pageTextObjects = textObjects.filter((o: { pageIndex: number }) => o.pageIndex === pageIndex) as SerializableTextObject[];
+  const pageAnnotations = annotations.filter((a: { pageIndex: number }) => a.pageIndex === pageIndex);
+  const pageSelected = selectedObjects.filter((o: { pageIndex: number }) => o.pageIndex === pageIndex);
 
   // ── pdf.js canvas rendering ──────────────────────────────────────
   const { pdfJsDoc, targetedReloads } = useDocumentStore();
@@ -115,7 +177,7 @@ export const PageCanvas = memo(function PageCanvas({
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const drawingAnnotations = annotations.filter(
-      (a) => a.type === 'drawing' && a.pageIndex === pageIndex
+      (a: { type: string; pageIndex: number }) => a.type === 'drawing' && a.pageIndex === pageIndex
     );
     for (const ann of drawingAnnotations) {
       const img = new Image();
@@ -479,8 +541,10 @@ export const PageCanvas = memo(function PageCanvas({
       )}
 
       {/* Text object overlays */}
-      {pageTextObjects.map((textObj) => {
-        const isCurrentlySelected = pageSelected.some((o) => o.id === textObj.id);
+      {pageTextObjects
+        .filter((textObj: { x: number; y: number; width: number; height: number }) => isObjectVisible(textObj.x, textObj.y, textObj.width, textObj.height))
+        .map((textObj) => {
+        const isCurrentlySelected = pageSelected.some((o: { id: string }) => o.id === textObj.id);
         return (
           <div
             key={textObj.id}
@@ -529,7 +593,7 @@ export const PageCanvas = memo(function PageCanvas({
             >
               {(() => {
                 const activeMatch = searchActiveMatches.find(
-                  (m) => m.textObjectId === textObj.id
+                  (m: { textObjectId: string }) => m.textObjectId === textObj.id
                 );
                 if (!activeMatch) return null;
                 return (
@@ -565,7 +629,7 @@ export const PageCanvas = memo(function PageCanvas({
               ) : (
                 (() => {
                   const activeMatch = searchActiveMatches.find(
-                    (m) => m.textObjectId === textObj.id
+                    (m: { textObjectId: string }) => m.textObjectId === textObj.id
                   );
                   const content = textObj.content;
                   if (activeMatch && activeMatch.matchStart >= 0 && activeMatch.matchEnd <= content.length) {
@@ -615,9 +679,14 @@ export const PageCanvas = memo(function PageCanvas({
       })}
 
       {/* Image overlays — pdf-engine ImageObject instances */}
-      {pageObjects.images.map((imgObj: any) => {
+      {pageObjects.images
+        .filter((imgObj: any) => {
+          const bbox = imgObj.getBBox();
+          return isObjectVisible(bbox.x, bbox.y, bbox.width, bbox.height);
+        })
+        .map((imgObj: any) => {
         const bbox = imgObj.getBBox();
-        const isImgSelected = pageSelected.some((o) => o.id === imgObj.getId());
+        const isImgSelected = pageSelected.some((o: { id: string }) => o.id === imgObj.getId());
         return (
           <div
             key={imgObj.getId()}
@@ -661,8 +730,10 @@ export const PageCanvas = memo(function PageCanvas({
       })}
 
       {/* Zustand ImageObject overlays — user-added images */}
-      {imageObjects.filter((img) => img.pageIndex === pageIndex).map((imgObj) => {
-        const isImgSelected = pageSelected.some((o) => o.id === imgObj.id);
+      {imageObjects
+        .filter((img: { pageIndex: number; x: number; y: number; width: number; height: number }) => img.pageIndex === pageIndex && isObjectVisible(img.x, img.y, img.width, img.height))
+        .map((imgObj: { id: string; x: number; y: number; width: number; height: number; rotation?: number; opacity?: number; src?: string; pageIndex?: number }) => {
+        const isImgSelected = pageSelected.some((o: { id: string }) => o.id === imgObj.id);
         return (
           <div
             key={imgObj.id}
@@ -703,8 +774,10 @@ export const PageCanvas = memo(function PageCanvas({
       })}
 
       {/* Zustand Annotation overlays */}
-      {pageAnnotations.map((ann) => {
-        const isAnnSelected = pageSelected.some((o) => o.id === ann.id);
+      {pageAnnotations
+        .filter((ann: any) => isObjectVisible(ann.x, ann.y, ann.width, ann.height))
+        .map((ann: any) => {
+        const isAnnSelected = pageSelected.some((o: { id: string }) => o.id === ann.id);
         return (
           <div
             key={ann.id}
@@ -770,8 +843,8 @@ function getBoundingBoxOfPoints(points: Array<{ x: number; y: number }>): {
   x: number; y: number; width: number; height: number;
 } {
   if (points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
+  const xs = points.map((p: any) => p.x);
+  const ys = points.map((p: any) => p.y);
   return {
     x: Math.min(...xs), y: Math.min(...ys),
     width: Math.max(...xs) - Math.min(...xs),

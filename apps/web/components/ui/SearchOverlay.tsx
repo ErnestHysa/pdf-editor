@@ -35,8 +35,8 @@ export function SearchOverlay() {
   // Derive search results from store's searchActiveMatches + textObjects for display
   const searchResults = useMemo((): SearchResult[] => {
     return searchActiveMatches
-      .map((match) => {
-        const textObj = textObjects.find((t) => t.id === match.textObjectId);
+      .map((match: any) => {
+        const textObj = textObjects.find((t: any) => t.id === match.textObjectId);
         if (!textObj) return null;
         return {
           textObject: textObj,

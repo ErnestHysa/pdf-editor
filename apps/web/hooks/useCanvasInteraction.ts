@@ -37,7 +37,7 @@ export function useCanvasInteraction() {
     const canvasPt = screenToCanvas(e.clientX, e.clientY, canvasRect);
 
     if (activeTool === 'select' && clickedObjectId && pageIndex !== undefined) {
-      const obj = textObjects.find((o) => o.id === clickedObjectId);
+      const obj = textObjects.find((o: any) => o.id === clickedObjectId);
       dragState.current = {
         type: 'move',
         startX: canvasPt.x,

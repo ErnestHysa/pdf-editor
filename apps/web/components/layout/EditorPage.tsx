@@ -27,6 +27,7 @@ import { PageCanvas } from '@/components/canvas/PageCanvas';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FontWarningBanner } from '@/components/ui/FontWarningBanner';
 import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { useDeviceType } from '@/hooks/useDeviceType';
 import { useGestures } from '@/hooks/useGestures';
 
@@ -47,6 +48,7 @@ export function EditorPage() {
     setTextObjects, addTextObject, textObjects,
     annotations, addAnnotation, removeAnnotation,
     imageObjects, addImageObject, removeImageObject, updateImageObject,
+    isLoading,
   } = useDocumentStore();
 
   const {
@@ -62,7 +64,12 @@ export function EditorPage() {
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [isGesturing, setIsGesturing] = useState(false);
+
+  const handleCommandPaletteToggle = useCallback(() => {
+    setCommandPaletteOpen((v) => !v);
+  }, []);
     
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -222,7 +229,7 @@ export function EditorPage() {
 
       if (e.key === 'Escape') { clearSelection(); setContextMenu(null); if (showShortcuts) setShowShortcuts(false); return; }
       if (e.key === '?') { e.preventDefault(); setShowShortcuts((v) => !v); return; }
-      if (isMod && e.key === 'k') { e.preventDefault(); useUIStore.getState().setCommandPaletteOpen(true); return; }
+      if (isMod && e.key === 'k') { e.preventDefault(); handleCommandPaletteToggle(); return; }
 
       // Use getState() to avoid stale closures for selectedObjects and textObjects
       const { selectedObjects: currentSelected, textObjects: currentTextObjects, activePageIndex: currentPageIndex } = useDocumentStore.getState();
@@ -241,10 +248,10 @@ export function EditorPage() {
       if (e.key === 'Tab' && currentSelected.length > 0) {
         e.preventDefault();
         const currentPageObjs = currentTextObjects
-          .filter((o) => o.pageIndex === currentPageIndex)
-          .sort((a, b) => a.y - b.y || a.x - b.x);
+          .filter((o: { pageIndex: number; y: number; x: number; id: string }) => o.pageIndex === currentPageIndex)
+          .sort((a: { y: number; x: number }, b: { y: number; x: number }) => a.y - b.y || a.x - b.x);
         const currentId = currentSelected[0]?.id;
-        const idx = currentPageObjs.findIndex((o) => o.id === currentId);
+        const idx = currentPageObjs.findIndex((o: { id: string }) => o.id === currentId);
         const next = e.shiftKey
           ? currentPageObjs[(idx - 1 + currentPageObjs.length) % currentPageObjs.length]
           : currentPageObjs[(idx + 1) % currentPageObjs.length];
@@ -276,54 +283,54 @@ export function EditorPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, clearSelection, showShortcuts]);
+  }, [undo, redo, clearSelection, showShortcuts, handleCommandPaletteToggle]);
 
   // Shared delete logic used by keyboard and context menu
   const handleDeleteSelected = useCallback(() => {
     // Text
     const toRemoveText = selectedObjects
-      .filter((obj) => obj.type === 'text')
-      .map((obj) => textObjects.find((t) => t.id === obj.id))
+      .filter((obj: any) => obj.type === 'text')
+      .map((obj: any) => textObjects.find((t: any) => t.id === obj.id))
       .filter(Boolean) as SerializableTextObject[];
     if (toRemoveText.length > 0) {
       const removed = [...toRemoveText];
       useHistoryStore.getState().push({
         label: 'Delete text', description: 'Delete text',
-        targetIds: removed.map((obj) => obj.id),
-        undo: () => removed.forEach((obj) => useDocumentStore.getState().addTextObject(obj)),
-        redo: () => removed.forEach((obj) => useDocumentStore.getState().removeTextObject(obj.id)),
+        targetIds: removed.map((obj: any) => obj.id),
+        undo: () => removed.forEach((obj: any) => useDocumentStore.getState().addTextObject(obj)),
+        redo: () => removed.forEach((obj: any) => useDocumentStore.getState().removeTextObject(obj.id)),
       });
-      removed.forEach((obj) => useDocumentStore.getState().removeTextObject(obj.id));
+      removed.forEach((obj: any) => useDocumentStore.getState().removeTextObject(obj.id));
     }
     // Images (Zustand)
-    const toRemoveImgs = selectedObjects.filter((obj) => obj.type === 'image');
+    const toRemoveImgs = selectedObjects.filter((obj: any) => obj.type === 'image');
     if (toRemoveImgs.length > 0) {
       const removedImgs = [...toRemoveImgs];
       useHistoryStore.getState().push({
         label: 'Delete image', description: 'Delete image',
-        targetIds: removedImgs.map((obj) => obj.id),
-        undo: () => removedImgs.forEach((obj) => {
-          const img = useDocumentStore.getState().imageObjects.find((i) => i.id === obj.id);
+        targetIds: removedImgs.map((obj: any) => obj.id),
+        undo: () => removedImgs.forEach((obj: any) => {
+          const img = useDocumentStore.getState().imageObjects.find((i: any) => i.id === obj.id);
           if (img) addImageObject(img);
         }),
-        redo: () => toRemoveImgs.forEach((obj) => removeImageObject(obj.id)),
+        redo: () => toRemoveImgs.forEach((obj: any) => removeImageObject(obj.id)),
       });
-      toRemoveImgs.forEach((obj) => removeImageObject(obj.id));
+      toRemoveImgs.forEach((obj: any) => removeImageObject(obj.id));
     }
     // Annotations
-    const toRemoveAnns = selectedObjects.filter((obj) => obj.type === 'annotation');
+    const toRemoveAnns = selectedObjects.filter((obj: any) => obj.type === 'annotation');
     if (toRemoveAnns.length > 0) {
       const removedAnns = [...toRemoveAnns];
       useHistoryStore.getState().push({
         label: 'Delete annotation', description: 'Delete annotation',
-        targetIds: removedAnns.map((obj) => obj.id),
-        undo: () => removedAnns.forEach((obj) => {
-          const ann = useDocumentStore.getState().annotations.find((a) => a.id === obj.id);
+        targetIds: removedAnns.map((obj: any) => obj.id),
+        undo: () => removedAnns.forEach((obj: any) => {
+          const ann = useDocumentStore.getState().annotations.find((a: any) => a.id === obj.id);
           if (ann) addAnnotation(ann);
         }),
-        redo: () => toRemoveAnns.forEach((obj) => removeAnnotation(obj.id)),
+        redo: () => toRemoveAnns.forEach((obj: any) => removeAnnotation(obj.id)),
       });
-      toRemoveAnns.forEach((obj) => removeAnnotation(obj.id));
+      toRemoveAnns.forEach((obj: any) => removeAnnotation(obj.id));
     }
     clearSelection();
   }, [selectedObjects, textObjects, clearSelection]);
@@ -432,6 +439,12 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-col h-screen bg-bg-base overflow-hidden">
+      {/* Full-canvas loading overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 bg-bg-primary/80 backdrop-blur-sm flex items-center justify-center">
+          <Loader2 size={48} className="animate-spin text-text-primary" />
+        </div>
+      )}
       <AutosaveConflictBanner />
       <TopBar />
       {pdfDocument && <FontWarningBanner />}
@@ -467,7 +480,7 @@ export function EditorPage() {
               transformOrigin: 'top center',
             }}
           >
-            {pages.map((page, i) => (
+            {(pages as any[]).map((page: any, i: number) => (
               <ErrorBoundary key={i} pageIndex={i}>
                 <div
                   ref={(el) => { pageRefs.current[i] = el; }}
@@ -494,7 +507,7 @@ export function EditorPage() {
 
       {/* Global UI overlays */}
       <UndoRedoPill />
-      <CommandPalette />
+      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
       {showShortcuts && (
         <KeyboardShortcutsOverlay onClose={() => setShowShortcuts(false)} />
       )}

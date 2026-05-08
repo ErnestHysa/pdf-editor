@@ -23,17 +23,20 @@ export function UndoRedoPill() {
     }
   }, [canUndo, canRedo, getLastAction]);
 
-  // Handle skip feedback auto-clear
+  // Handle skip feedback — show toast when skip occurs, auto-clear after 3s
   useEffect(() => {
-    if (skippedReason) {
-      setSkipMessage(skippedReason);
-      setShowSkipFeedback(true);
-      clearSkippedReason();
-      const timer = setTimeout(() => {
-        setShowSkipFeedback(false);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+    if (!skippedReason) return;
+
+    setSkipMessage(skippedReason);
+    setShowSkipFeedback(true);
+    clearSkippedReason();
+
+    const timer = setTimeout(() => {
+      setShowSkipFeedback(false);
+      setSkipMessage(null);
+    }, 3000);
+
+    return () => clearTimeout(timer);
   }, [skippedReason, clearSkippedReason]);
 
   if (!pdfDocument) return null;

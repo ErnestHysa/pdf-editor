@@ -28,7 +28,7 @@ export function useTextEditor() {
     const page = pdfDocument.getPage(state.pageIndex);
     if (!page) return false;
 
-    const obj = page.getObjects().texts.find(t => t.getId() === state.objectId);
+    const obj = page.getObjects().texts.find((t: any) => t.getId() === state.objectId);
     if (!obj) return false;
 
     if (newContent === state.originalContent) return false;
@@ -44,14 +44,14 @@ export function useTextEditor() {
       undo: () => {
         const p = pdfDocument.getPage(pageIndex);
         if (!p) return;
-        const o = p.getObjects().texts.find(t => t.getId() === objectId);
+        const o = p.getObjects().texts.find((t: any) => t.getId() === objectId);
         if (o) o.setContent(originalContent);
         useDocumentStore.getState().setDirty(true);
       },
       redo: () => {
         const p = pdfDocument.getPage(pageIndex);
         if (!p) return;
-        const o = p.getObjects().texts.find(t => t.getId() === objectId);
+        const o = p.getObjects().texts.find((t: any) => t.getId() === objectId);
         if (o) o.setContent(newContent);
         useDocumentStore.getState().setDirty(true);
       },

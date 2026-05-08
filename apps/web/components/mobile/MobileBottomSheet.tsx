@@ -58,7 +58,7 @@ export function MobileBottomSheet() {
           <div className="px-4 pb-4 overflow-y-auto" style={{ height: 'calc(100% - 80px)' }}>
             {mobileBottomSheetMode === 'pages' && (
               <div className="flex gap-3 overflow-x-auto pb-2">
-                {pages.map((page, i) => (
+                {pages.map((page: any, i: number) => (
                   <button
                     key={i}
                     className="shrink-0 rounded border border-border overflow-hidden hover:border-accent transition-colors"

@@ -65,7 +65,7 @@ export function useSearch() {
     // objects are not added twice.
     if (pdfJsDoc) {
       try {
-        const existingIds = new Set(textObjects.map((t) => t.id));
+        const existingIds = new Set(textObjects.map((t: any) => t.id));
         const pageCount = pdfJsDoc.numPages;
         // Quick scan: for each page, get text content and search raw strings
         for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {

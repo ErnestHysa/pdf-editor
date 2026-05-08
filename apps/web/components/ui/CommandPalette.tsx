@@ -15,8 +15,7 @@ interface Command {
   action: () => void;
 }
 
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
+export function CommandPalette({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,15 +63,11 @@ export function CommandPalette() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setOpen((o) => !o);
-      }
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape' && onClose) onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [onClose]);
 
   useEffect(() => {
     if (open) {
@@ -88,13 +83,13 @@ export function CommandPalette() {
 
   const execute = useCallback((cmd: Command) => {
     cmd.action();
-    setOpen(false);
-  }, []);
+    if (onClose) onClose();
+  }, [onClose]);
 
   if (!open) {
     return (
       <button
-        onClick={() => setOpen(true)}
+        onClick={onClose}
         className="fixed top-3 right-20 z-50 px-3 py-1.5 rounded-lg bg-elevated border border-border text-xs text-secondary hover:text-primary hover:border-border-strong transition-colors hidden md:flex items-center gap-2"
       >
         <span>⌘K</span>
@@ -106,7 +101,7 @@ export function CommandPalette() {
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
-      onClick={() => setOpen(false)}
+      onClick={onClose}
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div
