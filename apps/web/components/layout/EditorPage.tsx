@@ -1,6 +1,6 @@
 'use client';
 import {
-  useEffect, useRef, useState, useCallback, Suspense,
+  useEffect, useRef, useState, useCallback, useMemo, Suspense,
 } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/legacy';
 import { useDocumentStore } from '@/stores/documentStore';
@@ -27,6 +27,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FontWarningBanner } from '@/components/ui/FontWarningBanner';
 import { cn } from '@/lib/utils';
 import { useDeviceType } from '@/hooks/useDeviceType';
+import { useGestures } from '@/hooks/useGestures';
 
 // ── EditorPage ────────────────────────────────────────────────────
 // The top-level editor shell. Handles:
@@ -34,7 +35,7 @@ import { useDeviceType } from '@/hooks/useDeviceType';
 //   - Global keyboard shortcuts
 //   - Layout (TopBar + sidebar + canvas + right panel)
 //   - Global overlays (command palette, undo pill, shortcuts, context menu)
-//   - Touch pinch-to-zoom
+//   - Touch gestures (pinch-to-zoom, long-press, double-tap) via useGestures hook
 // All rendering logic has been moved to PageCanvas.tsx
 
 export function EditorPage() {
@@ -62,12 +63,7 @@ export function EditorPage() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [isGesturing, setIsGesturing] = useState(false);
     
-  // R54: Pinch-to-zoom refs
-  const lastPinchDistance = useRef<number | null>(null);
-  const initialZoom = useRef(zoom);
-
-  // Long-press callback ref to avoid stale closures
-  const longPressCallbackRef = useRef<((x: number, y: number) => void) | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Canvas long-press handler: show context menu at viewport-relative coordinates
   // canvasX/canvasY are in canvas-space (untransformed); convert to viewport-space
@@ -81,6 +77,18 @@ export function EditorPage() {
     const screenY = canvasY * zoom + rect.top;
     setContextMenu({ x: screenX, y: screenY });
   }, [zoom, activePageIndex]);
+
+  // Stable handlers object to avoid effect re-runs on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const gestureHandlers = useMemo(() => ({
+    onLongPress: handleCanvasLongPress,
+    onGestureStart: () => setIsGesturing(true),
+    onGestureEnd: () => setIsGesturing(false),
+  }), [handleCanvasLongPress]);
+
+  // Consolidate gesture handling via useGestures hook
+  // Handles: pinch-to-zoom (via internal setZoom), long-press (context menu), double-tap, gesture guard
+  useGestures(containerRef, gestureHandlers);
 
   // Autosave to IndexedDB whenever document is dirty
   useAutosave();
@@ -150,8 +158,11 @@ export function EditorPage() {
       if (e.key === 'Escape') { clearSelection(); setContextMenu(null); return; }
       if (e.key === '?') { e.preventDefault(); setShowShortcuts((v) => !v); return; }
       if (isMod && e.key === 'k') { e.preventDefault(); useUIStore.getState().setCommandPaletteOpen(true); return; }
-      
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObjects.length > 0) {
+
+      // Use getState() to avoid stale closures for selectedObjects and textObjects
+      const { selectedObjects: currentSelected, textObjects: currentTextObjects, activePageIndex: currentPageIndex } = useDocumentStore.getState();
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && currentSelected.length > 0) {
         e.preventDefault();
         handleDeleteSelected();
         return;
@@ -162,12 +173,12 @@ export function EditorPage() {
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
 
       // Tab navigation between text objects on the active page
-      if (e.key === 'Tab' && selectedObjects.length > 0) {
+      if (e.key === 'Tab' && currentSelected.length > 0) {
         e.preventDefault();
-        const currentPageObjs = textObjects
-          .filter((o) => o.pageIndex === activePageIndex)
+        const currentPageObjs = currentTextObjects
+          .filter((o) => o.pageIndex === currentPageIndex)
           .sort((a, b) => a.y - b.y || a.x - b.x);
-        const currentId = selectedObjects[0]?.id;
+        const currentId = currentSelected[0]?.id;
         const idx = currentPageObjs.findIndex((o) => o.id === currentId);
         const next = e.shiftKey
           ? currentPageObjs[(idx - 1 + currentPageObjs.length) % currentPageObjs.length]
@@ -199,7 +210,7 @@ export function EditorPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, clearSelection, selectedObjects, textObjects, activePageIndex]);
+  }, [undo, redo, clearSelection]);
 
   // Shared delete logic used by keyboard and context menu
   const handleDeleteSelected = useCallback(() => {
@@ -288,6 +299,7 @@ export function EditorPage() {
 
         {/* Canvas area */}
         <div
+          ref={containerRef}
           className="flex-1 overflow-auto bg-bg-base relative"
           style={{ touchAction: 'none' }}
           role="application"
@@ -299,31 +311,6 @@ export function EditorPage() {
             if ((e.target as HTMLElement).classList.contains('canvas-scroll-root')) {
               clearSelection();
             }
-          }}
-          onTouchStart={(e) => {
-            if (e.touches.length >= 2) {
-              setIsGesturing(true);
-              const dx = e.touches[0].clientX - e.touches[1].clientX;
-              const dy = e.touches[0].clientY - e.touches[1].clientY;
-              lastPinchDistance.current = Math.sqrt(dx * dx + dy * dy);
-              initialZoom.current = zoom;
-            }
-          }}
-          onTouchMove={(e) => {
-            if (e.touches.length >= 2 && lastPinchDistance.current !== null) {
-              const dx = e.touches[0].clientX - e.touches[1].clientX;
-              const dy = e.touches[0].clientY - e.touches[1].clientY;
-              const distance = Math.sqrt(dx * dx + dy * dy);
-              const scale = distance / lastPinchDistance.current;
-              const newZoom = Math.min(Math.max(initialZoom.current * scale, 0.25), 4.0);
-              setZoom(newZoom);
-            }
-          }}
-          onTouchEnd={(e) => {
-            if (e.touches.length < 2) {
-              setIsGesturing(false);
-            }
-            lastPinchDistance.current = null;
           }}
         >
           {/* Screen reader instructions */}

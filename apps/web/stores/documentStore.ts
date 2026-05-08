@@ -165,6 +165,10 @@ interface DocumentState {
   addImageObject: (obj: SerializableImageObject) => void;
   removeImageObject: (id: string) => void;
   updateImageObject: (id: string, updates: Partial<SerializableImageObject>) => void;
+  // Form field management (R65)
+  formFieldValues: Record<string, string | boolean>; // field name -> modified value
+  updateFormFieldValue: (fieldName: string, value: string | boolean) => void;
+  resetFormFieldValues: () => void;
 }
 
 const initialState = {
@@ -181,6 +185,7 @@ const initialState = {
   imageObjects: [],
   clipboard: [],
   annotations: [],
+  formFieldValues: {},
 };
 
 export const useDocumentStore = create<DocumentState>()(
@@ -404,6 +409,16 @@ export const useDocumentStore = create<DocumentState>()(
           state.imageObjects[idx] = { ...state.imageObjects[idx], ...updates } as SerializableImageObject;
           state.isDirty = true;
         }
+      }),
+    // ── Form field management (R65) ────────────────────────────────
+    updateFormFieldValue: (fieldName, value) =>
+      set((state) => {
+        state.formFieldValues[fieldName] = value;
+        state.isDirty = true;
+      }),
+    resetFormFieldValues: () =>
+      set((state) => {
+        state.formFieldValues = {};
       }),
     copySelected: () =>
       set((state) => {

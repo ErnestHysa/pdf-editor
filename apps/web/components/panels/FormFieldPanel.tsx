@@ -13,7 +13,7 @@ export interface FormFieldState {
 }
 
 export function FormFieldPanel() {
-  const { pdfJsDoc, setDirty } = useDocumentStore();
+  const { pdfJsDoc, setDirty, formFieldValues, updateFormFieldValue } = useDocumentStore();
   const [formFields, setFormFields] = useState<FormFieldState[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -83,14 +83,23 @@ export function FormFieldPanel() {
     loadFormFields();
   }, [loadFormFields]);
 
-  const updateFieldValue = useCallback((index: number, newValue: string | boolean) => {
-    setFormFields((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], value: newValue };
-      return updated;
-    });
+  const handleFieldChange = useCallback((fieldName: string, newValue: string | boolean) => {
+    updateFormFieldValue(fieldName, newValue);
     setDirty(true);
-  }, [setDirty]);
+  }, [updateFormFieldValue, setDirty]);
+
+  /** Returns the current display value for a field — uses store value if modified */
+  const getDisplayValue = useCallback((field: FormFieldState): string | boolean => {
+    if (field.fieldName && field.fieldName in formFieldValues) {
+      return formFieldValues[field.fieldName];
+    }
+    return field.value;
+  }, [formFieldValues]);
+
+  /** True if this field has been modified in the store */
+  const isModified = useCallback((field: FormFieldState): boolean => {
+    return field.fieldName in formFieldValues;
+  }, [formFieldValues]);
 
   if (loading) {
     return (
@@ -121,12 +130,19 @@ export function FormFieldPanel() {
               <label className="text-2xs text-text-tertiary block">
                 {field.name || `Field ${index + 1}`}
                 <span className="text-text-tertiary ml-1">({field.type})</span>
+                {/* Unsaved indicator — yellow dot when field is modified */}
+                {isModified(field) && (
+                  <span
+                    className="ml-2 inline-block w-2 h-2 rounded-full bg-yellow-400 align-middle"
+                    title="Unsaved change"
+                  />
+                )}
               </label>
               {field.type === "text" && (
                 <input
                   type="text"
-                  value={field.value as string}
-                  onChange={(e) => updateFieldValue(index, e.target.value)}
+                  value={getDisplayValue(field) as string}
+                  onChange={(e) => handleFieldChange(field.fieldName, e.target.value)}
                   className="w-full bg-bg-elevated border border-border rounded px-2 py-1 text-sm text-text-primary"
                   placeholder="Enter text..."
                 />
@@ -135,12 +151,12 @@ export function FormFieldPanel() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={Boolean(field.value)}
-                    onChange={(e) => updateFieldValue(index, e.target.checked)}
+                    checked={Boolean(getDisplayValue(field))}
+                    onChange={(e) => handleFieldChange(field.fieldName, e.target.checked)}
                     className="accent-accent w-4 h-4"
                   />
                   <span className="text-sm text-text-secondary">
-                    {field.value ? "Checked" : "Unchecked"}
+                    {getDisplayValue(field) ? "Checked" : "Unchecked"}
                   </span>
                 </label>
               )}
@@ -152,8 +168,8 @@ export function FormFieldPanel() {
                         type="radio"
                         name={field.name}
                         value={option}
-                        checked={field.value === option}
-                        onChange={() => updateFieldValue(index, option)}
+                        checked={getDisplayValue(field) === option}
+                        onChange={() => handleFieldChange(field.fieldName, option)}
                         className="accent-accent w-4 h-4"
                       />
                       <span className="text-sm text-text-secondary">{option}</span>
@@ -164,8 +180,8 @@ export function FormFieldPanel() {
               {field.type === "button" && (
                 <input
                   type="text"
-                  value={field.value as string}
-                  onChange={(e) => updateFieldValue(index, e.target.value)}
+                  value={getDisplayValue(field) as string}
+                  onChange={(e) => handleFieldChange(field.fieldName, e.target.value)}
                   className="w-full bg-bg-elevated border border-border rounded px-2 py-1 text-sm text-text-primary"
                   placeholder="Button label..."
                 />

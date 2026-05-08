@@ -16,6 +16,7 @@ interface HistoryState {
   actions: HistoryAction[];
   pointer: number; // index of last applied action (-1 = nothing applied)
   maxSize: number;
+  skippedReason: string | null;
 
   push: (action: Omit<HistoryAction, 'id' | 'timestamp' | 'validate'>) => void;
   undo: () => boolean;
@@ -23,6 +24,7 @@ interface HistoryState {
   canUndo: () => boolean;
   canRedo: () => boolean;
   getLastAction: () => HistoryAction | null;
+  clearSkippedReason: () => void;
   clear: () => void;
 }
 
@@ -30,6 +32,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   actions: [],
   pointer: -1,
   maxSize: 100,
+  skippedReason: null,
 
   push: (action) =>
     set((state) => {
@@ -69,7 +72,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     if (pointer < 0) return false;
     const action = actions[pointer];
     if (!action.validate()) {
-      console.warn(`[History] Cannot undo "${action.label}": target object(s) no longer exist in document`);
+      const reason = `Cannot undo "${action.label}"`;
+      console.warn(`[History] ${reason}: target object(s) no longer exist in document`);
+      set({ skippedReason: reason });
       return false;
     }
     action.undo();
@@ -83,7 +88,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     const nextPointer = pointer + 1;
     const action = actions[nextPointer];
     if (!action.validate()) {
-      console.warn(`[History] Cannot redo "${action.label}": target object(s) no longer exist in document`);
+      const reason = `Cannot redo "${action.label}"`;
+      console.warn(`[History] ${reason}: target object(s) no longer exist in document`);
+      set({ skippedReason: reason });
       return false;
     }
     action.redo();
@@ -98,6 +105,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     const { pointer, actions } = get();
     return pointer >= 0 ? actions[pointer] : null;
   },
+
+  clearSkippedReason: () => set({ skippedReason: null }),
 
   clear: () => set({ actions: [], pointer: -1 }),
 }));

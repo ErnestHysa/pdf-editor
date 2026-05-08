@@ -1,12 +1,11 @@
 'use client';
-import { useRef, useEffect, useState, useCallback, forwardRef } from 'react';
+import { useRef, useCallback } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useToolStore } from '@/stores/toolStore';
-import { useHistoryStore } from '@/stores/historyStore';
-import { usePdfRenderer } from '@/hooks/usePdfRenderer';
-import { ZoomControl } from './ZoomControl';
-import { PageRenderer } from './PageRenderer';
+import { ZoomControl } from '@/components/canvas/ZoomControl';
+import { PageCanvas } from '@/components/canvas/PageCanvas';
+import { useDeviceType } from '@/hooks/useDeviceType';
 import { cn } from '@/lib/utils';
 
 interface CanvasAreaProps {
@@ -16,88 +15,73 @@ interface CanvasAreaProps {
 export function CanvasArea({ className }: CanvasAreaProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { zoom, setZoom, panOffset, setPanOffset } = useUIStore();
-  const { pdfDocument, activePageIndex } = useDocumentStore();
-  const { activeTool, isDrawing, setDrawing } = useToolStore();
+  const { pdfDocument, activePageIndex, setActivePage } = useDocumentStore();
+  const { isDrawing } = useToolStore();
+  const deviceType = useDeviceType();
   const pages = pdfDocument?.getPages() ?? [];
 
   // Panning state
-  const [isPanning, setIsPanning] = useState(false);
+  const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 
-  // Zoom with scroll
-  const handleWheel = useCallback((e: WheelEvent) => {
+  const handleWheel: React.WheelEventHandler<HTMLDivElement> = useCallback((e) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom(zoom + delta);
+      setZoom(Math.min(Math.max(zoom + delta, 0.25), 4.0));
     }
   }, [zoom, setZoom]);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
-
-  // Pan start
-  const onMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && activeTool === 'select' && !isDrawing)) {
-      // Middle mouse or space+drag
-      setIsPanning(true);
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button === 1 || (e.button === 0 && !isDrawing)) {
+      isPanning.current = true;
       panStart.current = { x: e.clientX, y: e.clientY, offsetX: panOffset.x, offsetY: panOffset.y };
     }
-  };
+  }, [isDrawing, panOffset]);
 
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning) return;
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning.current) return;
     const dx = e.clientX - panStart.current.x;
     const dy = e.clientY - panStart.current.y;
     setPanOffset({ x: panStart.current.offsetX + dx, y: panStart.current.offsetY + dy });
-  };
+  }, [setPanOffset]);
 
-  const onMouseUp = () => setIsPanning(false);
-
-  const canvasStyle: React.CSSProperties = {
-    transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
-    transformOrigin: 'top center',
-  };
+  const onMouseUp = useCallback(() => { isPanning.current = false; }, []);
 
   return (
     <div
       ref={containerRef}
-      className={cn(
-        'canvas-area relative overflow-auto bg-bg-base',
-        isPanning ? 'cursor-grabbing' : 'cursor-default',
-        className
-      )}
+      className={cn('relative overflow-auto bg-bg-base', isPanning.current ? 'cursor-grabbing' : 'cursor-default', className)}
       style={{ touchAction: 'none' }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
+      onWheel={handleWheel}
     >
-      {/* Canvas pages */}
-      <div className="pt-8 pb-24 px-8 min-h-full" style={canvasStyle}>
+      <div className="pt-8 pb-24 px-8 min-h-full" style={{
+        transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+        transformOrigin: 'top center',
+      }}>
         {pages.length === 0 ? (
           <div className="flex items-center justify-center h-full min-h-[600px]">
             <p className="text-text-tertiary text-sm">Open a PDF to start editing</p>
           </div>
         ) : (
           pages.map((page, i) => (
-            <PageRenderer
+            <PageCanvas
               key={i}
               page={page}
               pageIndex={i}
               isActive={i === activePageIndex}
-              scale={zoom}
+              onPageClick={() => setActivePage(i)}
+              zoom={zoom}
             />
           ))
         )}
       </div>
 
-      {/* Zoom control */}
-      {pages.length > 0 && (
+      {pages.length > 0 && deviceType !== 'mobile' && (
         <ZoomControl />
       )}
     </div>

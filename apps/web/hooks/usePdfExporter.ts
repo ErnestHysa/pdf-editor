@@ -1,6 +1,72 @@
 "use client";
-import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
+import { PDFDocument, PDFName, PDFDict, PDFString, PDFObject, rgb, StandardFonts, degrees } from "pdf-lib";
 import { useDocumentStore } from "@/stores/documentStore";
+
+/**
+ * R65: Writes modified form field values from Zustand store back into the pdf-lib
+ * document's AcroForm dictionary. Iterates all fields in the document's /AcroForm/Fields
+ * array and updates /V (value) for each matching field name.
+ *
+ * - Text fields: sets /V to the new string value
+ * - Checkboxes: sets /V to /Yes when checked, /Off when unchecked
+ * - Radio buttons: sets /V to the selected option value
+ */
+function applyFormFieldValuesToDoc(libDoc: PDFDocument): void {
+  const { formFieldValues } = useDocumentStore.getState();
+  const modifiedKeys = Object.keys(formFieldValues);
+  if (modifiedKeys.length === 0) return;
+
+  try {
+    const acroForm = libDoc.catalog.get(PDFName.of("AcroForm"));
+    if (!acroForm || !(acroForm instanceof PDFDict)) return;
+
+    const fieldsRef = acroForm.get(PDFName.of("Fields"));
+    if (!fieldsRef) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fields = (fieldsRef as any).value ?? fieldsRef;
+    if (!Array.isArray(fields)) return;
+
+    for (const fieldRef of fields) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let fieldDict = (fieldRef as any).lookup?.() ?? fieldRef as any;
+      if (!fieldDict || typeof fieldDict.get !== "function") continue;
+
+      const fieldName = fieldDict.get(PDFName.of("T"));
+      if (!fieldName) continue;
+
+      const nameStr = String(fieldName);
+      if (!(nameStr in formFieldValues)) continue;
+
+      const newValue = formFieldValues[nameStr];
+      const fieldType = fieldDict.get(PDFName.of("FT"));
+      const typeStr = fieldType ? String(fieldType) : "";
+
+      if (typeStr === "/Btn") {
+        // Button field (checkbox or radio)
+        if (typeof newValue === "boolean") {
+          fieldDict.set(PDFName.of("V"), newValue ? PDFName.of("Yes") : PDFName.of("Off"));
+          fieldDict.set(PDFName.of("AS"), newValue ? PDFName.of("Yes") : PDFName.of("Off"));
+        } else {
+          fieldDict.set(PDFName.of("V"), PDFName.of(String(newValue)));
+        }
+      } else if (typeStr === "/Tx") {
+        // Text field — /V is a PDF string
+        fieldDict.set(PDFName.of("V"), PDFString.of(String(newValue)));
+      } else if (typeStr === "/Ch") {
+        // Choice field — /V is a PDF string
+        fieldDict.set(PDFName.of("V"), PDFString.of(String(newValue)));
+      } else {
+        // Default: try setting /V directly
+        fieldDict.set(PDFName.of("V"), typeof newValue === "boolean"
+          ? (newValue ? PDFName.of("Yes") : PDFName.of("Off"))
+          : PDFName.of(String(newValue)));
+      }
+    }
+  } catch (e) {
+    console.warn("[R65] Failed to apply form field values:", e);
+  }
+}
 
 /**
  * Applies text object changes from Zustand textObjects to the pdf-lib document,
@@ -96,6 +162,7 @@ export async function exportPdfWithChanges(): Promise<Uint8Array> {
     }
   }
 
+  applyFormFieldValuesToDoc(libDoc);
   return libDoc.save();
 }
 
@@ -353,6 +420,7 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
     }
   }
 
+  applyFormFieldValuesToDoc(libDoc);
   return libDoc.save();
 }
 
@@ -364,6 +432,7 @@ export async function exportPdfOptimized(): Promise<Uint8Array> {
   if (!pdfDocument) throw new Error("No PDF document loaded");
 
   const libDoc = pdfDocument.getLibDoc();
+  applyFormFieldValuesToDoc(libDoc);
   return libDoc.save();
 }
 
@@ -647,6 +716,7 @@ export async function exportPdfWithNativeAnnotations(): Promise<Uint8Array> {
     }
   }
 
+  applyFormFieldValuesToDoc(libDoc);
   const bytes = await libDoc.save();
   useDocumentStore.getState().setDirty(false);
   return bytes;

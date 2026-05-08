@@ -9,6 +9,8 @@ interface GestureHandlers {
   onPan?: (dx: number, dy: number) => void;
   onLongPress?: (x: number, y: number) => void;
   onDoubleTap?: (x: number, y: number) => void;
+  onGestureStart?: () => void;
+  onGestureEnd?: () => void;
 }
 
 export function useGestures(ref: React.RefObject<HTMLElement | null>, handlers: GestureHandlers) {
@@ -34,6 +36,7 @@ export function useGestures(ref: React.RefObject<HTMLElement | null>, handlers: 
       if (e.touches.length === 2) {
         state.current.initialDistance = getDistance(e.touches);
         state.current.initialZoom = zoom;
+        handlers.onGestureStart?.();
         e.preventDefault();
       } else if (e.touches.length === 1) {
         // Long press detection
@@ -65,6 +68,11 @@ export function useGestures(ref: React.RefObject<HTMLElement | null>, handlers: 
       if (state.current.longPressTimer) {
         clearTimeout(state.current.longPressTimer);
         state.current.longPressTimer = null;
+      }
+
+      // Gesture ended: all fingers lifted
+      if (e.touches.length === 0) {
+        handlers.onGestureEnd?.();
       }
 
       // Double tap detection
