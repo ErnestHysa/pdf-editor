@@ -78,6 +78,7 @@ export function MobileBottomSheet() {
 
             {mobileBottomSheetMode === 'tool-options' && (
               <div className="space-y-4">
+                {/* Color */}
                 <div>
                   <label className="text-xs text-text-secondary block mb-2">
                     Color
@@ -94,6 +95,49 @@ export function MobileBottomSheet() {
                         }}
                       />
                     ))}
+                  </div>
+                </div>
+                {/* Font Size */}
+                <div>
+                  <label className="text-xs text-text-secondary block mb-2">Font Size</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setToolOption('fontSize', Math.max(8, (toolOptions.fontSize ?? 14) - 2))}
+                      className="w-8 h-8 rounded border border-border flex items-center justify-center text-sm"
+                    >
+                      −
+                    </button>
+                    <span className="text-sm font-mono w-8 text-center">{toolOptions.fontSize ?? 14}px</span>
+                    <button
+                      onClick={() => setToolOption('fontSize', Math.min(72, (toolOptions.fontSize ?? 14) + 2))}
+                      className="w-8 h-8 rounded border border-border flex items-center justify-center text-sm"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                {/* Bold / Italic */}
+                <div>
+                  <label className="text-xs text-text-secondary block mb-2">Style</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const current = toolOptions.fontWeight === 'bold';
+                        setToolOption('fontWeight', current ? 'normal' : 'bold');
+                      }}
+                      className={`w-9 h-9 rounded border flex items-center justify-center font-bold ${toolOptions.fontWeight === 'bold' ? 'bg-accent text-white' : 'border-border'}`}
+                    >
+                      B
+                    </button>
+                    <button
+                      onClick={() => {
+                        const current = toolOptions.fontStyle === 'italic';
+                        setToolOption('fontStyle', current ? 'normal' : 'italic');
+                      }}
+                      className={`w-9 h-9 rounded border flex items-center justify-center italic ${toolOptions.fontStyle === 'italic' ? 'bg-accent text-white' : 'border-border'}`}
+                    >
+                      I
+                    </button>
                   </div>
                 </div>
               </div>

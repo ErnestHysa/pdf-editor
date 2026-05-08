@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
+import { ExportDialog } from '@/components/dialogs/ExportDialog';
 import {
   Sun, Moon, Download, Share2, Settings, PanelLeft, PanelRight,
   Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive, Loader2, Check, WifiOff
@@ -18,11 +19,10 @@ import {
 } from '@/hooks/usePdfExporter';
 
 export function TopBar() {
-  const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel } = useUIStore();
+  const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel, exportDialogOpen, setExportDialogOpen } = useUIStore();
   const { undo, redo, canUndo, canRedo, getLastAction } = useHistoryStore();
   const { fileName, isDirty, pdfDocument, activePageIndex, saveStatus, lastSavedAt } = useDocumentStore();
   const deviceType = useDeviceType();
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const lastAction = getLastAction();
@@ -34,36 +34,6 @@ export function TopBar() {
       return () => clearTimeout(timer);
     }
   }, [exportError]);
-
-  const handleExport = async (type: string) => {
-    setExportMenuOpen(false);
-    setExporting(type);
-    setExportError(null);
-    try {
-      switch (type) {
-        case 'pdf':
-          await downloadPdfWithChanges();
-          break;
-        case 'flattened':
-          await downloadPdfFlattened();
-          break;
-        case 'optimized':
-          await downloadPdfOptimized();
-          break;
-        case 'png':
-          await downloadPageAsPng(activePageIndex);
-          break;
-        case 'jpeg':
-          await downloadPageAsJpeg(activePageIndex);
-          break;
-      }
-    } catch (err) {
-      console.error('Export failed:', err);
-      setExportError('Export failed. Please try again.');
-    } finally {
-      setExporting(null);
-    }
-  };
 
   return (
     <header
@@ -183,82 +153,30 @@ export function TopBar() {
               {deviceType !== 'mobile' && 'Save'}
             </button>
 
-            {/* Export dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                disabled={!!exporting}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-white text-sm font-medium transition-colors",
-                  exporting
-                    ? "bg-accent/50 cursor-not-allowed"
-                    : "bg-accent hover:bg-accent-hover"
-                )}
-                aria-label="Export document"
-              >
-                {exporting ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    {deviceType !== 'mobile' && 'Exporting...'}
-                  </>
-                ) : (
-                  <>
-                    <Download size={14} />
-                    {deviceType !== 'mobile' && 'Export'}
-                    <ChevronDown size={12} />
-                  </>
-                )}
-              </button>
-
-              {exportMenuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-56 bg-bg-elevated border border-border rounded-md shadow-lg z-50 py-1">
-                  <button
-                    onClick={() => handleExport('pdf')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
-                  >
-                    <FileText size={14} />
-                    Download PDF
-                  </button>
-                  <button
-                    onClick={() => handleExport('flattened')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
-                  >
-                    <FileArchive size={14} />
-                    Download Flattened
-                  </button>
-                  <button
-                    onClick={() => handleExport('optimized')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
-                  >
-                    <FileArchive size={14} />
-                    Download Optimized
-                  </button>
-                  <div className="border-t border-border my-1" />
-                  <button
-                    onClick={() => handleExport('png')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
-                  >
-                    <Image size={14} />
-                    Export Page as PNG
-                  </button>
-                  <button
-                    onClick={() => handleExport('jpeg')}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors"
-                  >
-                    <Image size={14} />
-                    Export Page as JPEG
-                  </button>
-                </div>
+            {/* Export button */}
+            <button
+              onClick={() => setExportDialogOpen(true)}
+              disabled={!!exporting}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-white text-sm font-medium transition-colors",
+                exporting
+                  ? "bg-accent/50 cursor-not-allowed"
+                  : "bg-accent hover:bg-accent-hover"
               )}
-            </div>
-
-            {/* Click outside to close */}
-            {exportMenuOpen && (
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setExportMenuOpen(false)}
-              />
-            )}
+              aria-label="Export document"
+            >
+              {exporting ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  {deviceType !== 'mobile' && 'Exporting...'}
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  {deviceType !== 'mobile' && 'Export'}
+                </>
+              )}
+            </button>
           </>
         )}
 
@@ -288,6 +206,12 @@ export function TopBar() {
           {exportError}
         </div>
       )}
+
+      {/* Export dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+      />
     </header>
   );
 }
