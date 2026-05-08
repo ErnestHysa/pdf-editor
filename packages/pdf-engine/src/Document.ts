@@ -148,8 +148,12 @@ export class PdfDocument {
     return await this.pdfLibDoc.save();
   }
 
-  saveArrayBuffer(): ArrayBuffer {
-    return new ArrayBuffer(0);
+  async saveArrayBuffer(): Promise<ArrayBuffer> {
+    if (!this.pdfLibDoc) {
+      throw new Error('No pdf-lib document loaded');
+    }
+    const bytes = await this.pdfLibDoc.save();
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   }
 
   getLibDoc(): PDFDocument {

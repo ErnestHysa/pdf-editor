@@ -1,29 +1,82 @@
 import { create } from 'zustand';
 import { useDocumentStore } from './documentStore';
 
+/**
+ * Action types for serializable history.
+ * Each type carries enough data to reconstruct undo/redo at hydration time.
+ */
+export type HistoryActionType =
+  | 'text-edit'
+  | 'text-add'
+  | 'text-delete'
+  | 'annotation-add'
+  | 'annotation-delete'
+  | 'annotation-update'
+  | 'image-add'
+  | 'image-delete'
+  | 'image-update'
+  | 'page-add'
+  | 'page-delete'
+  | 'page-duplicate'
+  | 'page-reorder'
+  | 'page-rotate'
+  | 'page-crop'
+  | 'form-field-update';
+
+/** Data payload per action type — enough to reconstruct undo/redo */
+export interface HistoryActionData {
+  /** Human-readable label */
+  label: string;
+  /** Object IDs this action affected */
+  targetIds: string[];
+  /** Type discriminator */
+  type: HistoryActionType;
+  /** For text-edit: original content before the edit (for undo) */
+  previousContent?: string;
+  /** For text-edit: new content after the edit (for redo) */
+  newContent?: string;
+  /** For add/delete operations: full serializable object data for re-creation */
+  objectData?: unknown;
+  /** For page operations: page index */
+  pageIndex?: number;
+  /** For page-reorder: original index */
+  fromIndex?: number;
+  /** For page-reorder: destination index */
+  toIndex?: number;
+  /** For page-rotate: rotation angle in degrees */
+  rotation?: number;
+  /** For page-crop: previous crop box */
+  previousCropBox?: { x: number; y: number; width: number; height: number };
+  /** For form-field-update: previous field value */
+  previousValue?: string | boolean;
+  /** For form-field-update: new field value */
+  newValue?: string | boolean;
+}
+
+/** Live history action with executable undo/redo */
 interface HistoryAction {
   id: string;
-  label: string;
-  description: string;
+  data: HistoryActionData;
   timestamp: number;
-  targetIds: string[]; // object IDs this action affects (for validation)
-  undo: () => void;
-  redo: () => void;
-  validate: () => boolean; // check if target IDs still exist in documentStore
+  validate: () => boolean;
+  /** Execute the undo for this action */
+  executeUndo: () => void;
+  /** Execute the redo for this action */
+  executeRedo: () => void;
 }
 
 interface HistoryState {
   actions: HistoryAction[];
-  pointer: number; // index of last applied action (-1 = nothing applied)
+  pointer: number;
   maxSize: number;
   skippedReason: string | null;
 
-  push: (action: Omit<HistoryAction, 'id' | 'timestamp' | 'validate'>) => void;
+  push: (data: Omit<HistoryActionData, never>) => void;
   undo: () => boolean;
   redo: () => boolean;
   canUndo: () => boolean;
   canRedo: () => boolean;
-  getLastAction: () => HistoryAction | null;
+  getLastAction: () => (HistoryActionData & { id: string }) | null;
   clearSkippedReason: () => void;
   clear: () => void;
   hydrateHistory: (snapshot: HistorySnapshot) => void;
@@ -31,17 +84,206 @@ interface HistoryState {
   getSnapshot: () => HistorySnapshot;
 }
 
-/** Serializable snapshot of history state (functions cannot be stored in IndexedDB) */
+/** Serializable snapshot — safe to store in IndexedDB */
 export interface HistorySnapshot {
   actions: Array<{
     id: string;
-    label: string;
-    description: string;
+    data: HistoryActionData;
     timestamp: number;
-    targetIds: string[];
-    // undo/redo are re-created from the current documentStore state on restore
   }>;
   pointer: number;
+}
+
+/** Reconstruct executeUndo from action data + live store state */
+function buildExecuteUndo(data: HistoryActionData): () => void {
+  return () => {
+    const store = useDocumentStore.getState();
+    switch (data.type) {
+      case 'text-edit':
+        if (data.targetIds[0] && data.previousContent !== undefined) {
+          store.updateTextObject(data.targetIds[0], { content: data.previousContent });
+        }
+        break;
+      case 'text-add':
+        data.targetIds.forEach((id) => store.removeTextObject(id));
+        break;
+      case 'text-delete':
+        if (data.objectData) {
+          store.addTextObject(data.objectData as unknown as Parameters<typeof store.addTextObject>[0]);
+        }
+        break;
+      case 'annotation-add':
+        data.targetIds.forEach((id) => store.removeAnnotation(id));
+        break;
+      case 'annotation-delete':
+        if (data.objectData) {
+          store.addAnnotation(data.objectData as unknown as Parameters<typeof store.addAnnotation>[0]);
+        }
+        break;
+case 'annotation-update':
+        (data.targetIds as string[]).forEach((id) => {
+          if (data.objectData) {
+            const prev = (data.objectData as Record<string, unknown>)['previous'] as Record<string, unknown>;
+            if (prev) store.updateAnnotation(id, prev as Parameters<typeof store.updateAnnotation>[1]);
+          }
+        });
+        break;
+      case 'image-add':
+        (data.targetIds as string[]).forEach((id) => store.removeImageObject(id));
+        break;
+      case 'image-delete':
+        if (data.objectData) {
+          store.addImageObject(data.objectData as unknown as Parameters<typeof store.addImageObject>[0]);
+        }
+        break;
+      case 'image-update':
+        (data.targetIds as string[]).forEach((id) => {
+          const img = store.imageObjects.find((i) => i.id === id);
+          if (img && data.objectData) {
+            const prev = (data.objectData as Record<string, unknown>)['previous'] as Partial<typeof img>;
+            if (prev) store.updateImageObject(id, prev);
+          }
+        });
+        break;
+      case 'page-delete':
+        if (data.objectData) {
+          const obj = data.objectData as Record<string, unknown>;
+          store.addPage(data.pageIndex ?? -1, obj['size'] as { width: number; height: number } | undefined);
+        }
+        break;
+      case 'page-duplicate':
+        // Undo duplicate = delete the duplicated page
+        if (data.pageIndex !== undefined) {
+          store.deletePage(data.pageIndex + 1);
+        }
+        break;
+      case 'page-reorder':
+        if (data.fromIndex !== undefined && data.toIndex !== undefined) {
+          store.reorderPages(data.toIndex, data.fromIndex);
+        }
+        break;
+      case 'page-rotate':
+        if (data.pageIndex !== undefined && data.rotation !== undefined) {
+          store.rotatePage(data.pageIndex, data.rotation === 90 ? 'left' : 'right');
+        }
+        break;
+      case 'page-crop':
+        if (data.pageIndex !== undefined && data.previousCropBox) {
+          store.cropPage(data.pageIndex, data.previousCropBox);
+        }
+        break;
+      case 'form-field-update':
+        if (data.targetIds[0] && data.previousValue !== undefined) {
+          store.updateFormFieldValue(data.targetIds[0], data.previousValue);
+        }
+        break;
+      default:
+        break;
+    }
+  };
+}
+
+/** Reconstruct executeRedo from action data + live store state */
+function buildExecuteRedo(data: HistoryActionData): () => void {
+  return () => {
+    const store = useDocumentStore.getState();
+    switch (data.type) {
+      case 'text-edit':
+        if (data.targetIds[0] && data.newContent !== undefined) {
+          store.updateTextObject(data.targetIds[0], { content: data.newContent });
+        }
+        break;
+      case 'text-add':
+        if (data.objectData) {
+          store.addTextObject(data.objectData as unknown as Parameters<typeof store.addTextObject>[0]);
+        }
+        break;
+      case 'text-delete':
+        data.targetIds.forEach((id) => store.removeTextObject(id));
+        break;
+      case 'annotation-add':
+        if (data.objectData) {
+          store.addAnnotation(data.objectData as unknown as Parameters<typeof store.addAnnotation>[0]);
+        }
+        break;
+      case 'annotation-delete':
+        data.targetIds.forEach((id) => store.removeAnnotation(id));
+        break;
+      case 'annotation-update':
+        data.targetIds.forEach((id) => {
+          if (data.objectData) {
+            const obj = data.objectData as Record<string, unknown>;
+            const next = obj['next'] as Record<string, unknown>;
+            if (next) store.updateAnnotation(id, next as Parameters<typeof store.updateAnnotation>[1]);
+          }
+        });
+        break;
+      case 'image-add':
+        if (data.objectData) {
+          store.addImageObject(data.objectData as Parameters<typeof store.addImageObject>[0]);
+        }
+        break;
+      case 'image-delete':
+        data.targetIds.forEach((id) => store.removeImageObject(id));
+        break;
+      case 'image-update':
+        data.targetIds.forEach((id) => {
+          if (data.objectData) {
+            const obj = data.objectData as Record<string, unknown>;
+            const next = obj['next'] as Partial<Record<string, unknown>>;
+            if (next) store.updateImageObject(id, next as Parameters<typeof store.updateImageObject>[1]);
+          }
+        });
+        break;
+      case 'page-add':
+        store.addPage(data.pageIndex ?? -1);
+        break;
+      case 'page-delete':
+        if (data.pageIndex !== undefined) {
+          store.deletePage(data.pageIndex);
+        }
+        break;
+      case 'page-duplicate':
+        if (data.pageIndex !== undefined) {
+          store.duplicatePage(data.pageIndex);
+        }
+        break;
+      case 'page-reorder':
+        if (data.fromIndex !== undefined && data.toIndex !== undefined) {
+          store.reorderPages(data.fromIndex, data.toIndex);
+        }
+        break;
+      case 'page-rotate':
+        if (data.pageIndex !== undefined && data.rotation !== undefined) {
+          store.rotatePage(data.pageIndex, data.rotation === -90 ? 'left' : 'right');
+        }
+        break;
+      case 'page-crop':
+        if (data.pageIndex !== undefined && data.objectData) {
+          const obj = data.objectData as Record<string, unknown>;
+          const current = obj['current'] as { x: number; y: number; width: number; height: number };
+          if (current) store.cropPage(data.pageIndex, current);
+        }
+        break;
+      case 'form-field-update':
+        if (data.targetIds[0] && data.newValue !== undefined) {
+          store.updateFormFieldValue(data.targetIds[0], data.newValue);
+        }
+        break;
+      default:
+        break;
+    }
+  };
+}
+
+function validateFromStore(targetIds: string[], type: HistoryActionType): boolean {
+  const store = useDocumentStore.getState();
+  return targetIds.every((id) => {
+    const inText = store.textObjects.some((t) => t.id === id);
+    const inImage = store.imageObjects.some((img) => img.id === id);
+    const inAnnotation = store.annotations.some((a) => a.id === id);
+    return inText || inImage || inAnnotation;
+  });
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -50,37 +292,23 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   maxSize: 100,
   skippedReason: null,
 
-  push: (action) =>
+  push: (data) =>
     set((state) => {
-      // Truncate any redo history when a new action is pushed
       const actions = state.actions.slice(0, state.pointer + 1);
 
-      // Build validate function to check if target IDs still exist in documentStore
-      const validate = () => {
-        const docState = useDocumentStore.getState();
-        return action.targetIds.every((id) => {
-          const inText = docState.textObjects.some((t) => t.id === id);
-          const inImage = docState.imageObjects.some((img) => img.id === id);
-          const inAnnotation = docState.annotations.some((a) => a.id === id);
-          return inText || inImage || inAnnotation;
-        });
-      };
-
       const newAction: HistoryAction = {
-        ...action,
         id: Math.random().toString(36).slice(2),
+        data,
         timestamp: Date.now(),
-        validate,
+        validate: () => validateFromStore(data.targetIds, data.type),
+        executeUndo: buildExecuteUndo(data),
+        executeRedo: buildExecuteRedo(data),
       };
       actions.push(newAction);
-      // Keep within maxSize
       if (actions.length > state.maxSize) {
         actions.shift();
       }
-      return {
-        actions,
-        pointer: actions.length - 1,
-      };
+      return { actions, pointer: actions.length - 1 };
     }),
 
   undo: () => {
@@ -88,12 +316,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     if (pointer < 0) return false;
     const action = actions[pointer];
     if (!action.validate()) {
-      const reason = `Cannot undo "${action.label}"`;
+      const reason = `Cannot undo "${action.data.label}"`;
       console.warn(`[History] ${reason}: target object(s) no longer exist in document`);
       set({ skippedReason: reason });
       return false;
     }
-    action.undo();
+    action.executeUndo();
     set({ pointer: pointer - 1 });
     return true;
   },
@@ -104,12 +332,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     const nextPointer = pointer + 1;
     const action = actions[nextPointer];
     if (!action.validate()) {
-      const reason = `Cannot redo "${action.label}"`;
+      const reason = `Cannot redo "${action.data.label}"`;
       console.warn(`[History] ${reason}: target object(s) no longer exist in document`);
       set({ skippedReason: reason });
       return false;
     }
-    action.redo();
+    action.executeRedo();
     set({ pointer: nextPointer });
     return true;
   },
@@ -119,7 +347,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   getLastAction: () => {
     const { pointer, actions } = get();
-    return pointer >= 0 ? actions[pointer] : null;
+    return pointer >= 0 ? { id: actions[pointer].id, ...actions[pointer].data } : null;
   },
 
   clearSkippedReason: () => set({ skippedReason: null }),
@@ -127,31 +355,16 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   clear: () => set({ actions: [], pointer: -1 }),
 
   hydrateHistory: (snapshot) =>
-    set((state) => {
-      // Re-build full HistoryAction objects from the serializable snapshot.
-      // validate is re-created from current documentStore state.
-      const docState = useDocumentStore.getState();
+    set((_state) => {
       const restoredActions: HistoryAction[] = snapshot.actions.map((a) => ({
-        ...a,
-        validate: () =>
-          a.targetIds.every((id) => {
-            const inText = docState.textObjects.some((t) => t.id === id);
-            const inImage = docState.imageObjects.some((img) => img.id === id);
-            const inAnnotation = docState.annotations.some((ann) => ann.id === id);
-            return inText || inImage || inAnnotation;
-          }),
-        undo: () => {
-          // Undo is re-applied via the engine; the actual undo logic is driven by
-          // the engine state. Here we mark that we want to step back in history.
-          // The caller (e.g. useHistory) is responsible for calling engine.undo().
-          console.debug('[History] hydrate undo for action:', a.label);
-        },
-        redo: () => {
-          console.debug('[History] hydrate redo for action:', a.label);
-        },
+        id: a.id,
+        data: a.data,
+        timestamp: a.timestamp,
+        validate: () => validateFromStore(a.data.targetIds, a.data.type),
+        executeUndo: buildExecuteUndo(a.data),
+        executeRedo: buildExecuteRedo(a.data),
       }));
 
-      // Restore pointer clamped to valid range
       const pointer = Math.min(Math.max(snapshot.pointer, -1), restoredActions.length - 1);
       return { actions: restoredActions, pointer };
     }),
@@ -161,10 +374,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     return {
       actions: actions.map((a) => ({
         id: a.id,
-        label: a.label,
-        description: a.description,
+        data: a.data,
         timestamp: a.timestamp,
-        targetIds: a.targetIds,
       })),
       pointer,
     };

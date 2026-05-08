@@ -26,7 +26,7 @@ export class PdfEngine {
     return this.document.save();
   }
 
-  saveArrayBuffer(): ArrayBuffer {
+  async saveArrayBuffer(): Promise<ArrayBuffer> {
     if (!this.document) throw new Error('No document loaded');
     return this.document.saveArrayBuffer();
   }

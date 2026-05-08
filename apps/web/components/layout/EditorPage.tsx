@@ -295,10 +295,10 @@ export function EditorPage() {
     if (toRemoveText.length > 0) {
       const removed = [...toRemoveText];
       useHistoryStore.getState().push({
-        label: 'Delete text', description: 'Delete text',
+        label: 'Delete text',
         targetIds: removed.map((obj: any) => obj.id),
-        undo: () => removed.forEach((obj: any) => useDocumentStore.getState().addTextObject(obj)),
-        redo: () => removed.forEach((obj: any) => useDocumentStore.getState().removeTextObject(obj.id)),
+        type: 'text-delete',
+        objectData: removed,
       });
       removed.forEach((obj: any) => useDocumentStore.getState().removeTextObject(obj.id));
     }
@@ -307,13 +307,10 @@ export function EditorPage() {
     if (toRemoveImgs.length > 0) {
       const removedImgs = [...toRemoveImgs];
       useHistoryStore.getState().push({
-        label: 'Delete image', description: 'Delete image',
+        label: 'Delete image',
         targetIds: removedImgs.map((obj: any) => obj.id),
-        undo: () => removedImgs.forEach((obj: any) => {
-          const img = useDocumentStore.getState().imageObjects.find((i: any) => i.id === obj.id);
-          if (img) addImageObject(img);
-        }),
-        redo: () => toRemoveImgs.forEach((obj: any) => removeImageObject(obj.id)),
+        type: 'image-delete',
+        objectData: removedImgs,
       });
       toRemoveImgs.forEach((obj: any) => removeImageObject(obj.id));
     }
@@ -322,13 +319,10 @@ export function EditorPage() {
     if (toRemoveAnns.length > 0) {
       const removedAnns = [...toRemoveAnns];
       useHistoryStore.getState().push({
-        label: 'Delete annotation', description: 'Delete annotation',
+        label: 'Delete annotation',
         targetIds: removedAnns.map((obj: any) => obj.id),
-        undo: () => removedAnns.forEach((obj: any) => {
-          const ann = useDocumentStore.getState().annotations.find((a: any) => a.id === obj.id);
-          if (ann) addAnnotation(ann);
-        }),
-        redo: () => toRemoveAnns.forEach((obj: any) => removeAnnotation(obj.id)),
+        type: 'annotation-delete',
+        objectData: removedAnns,
       });
       toRemoveAnns.forEach((obj: any) => removeAnnotation(obj.id));
     }

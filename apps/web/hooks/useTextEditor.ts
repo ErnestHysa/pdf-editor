@@ -39,22 +39,12 @@ export function useTextEditor() {
 
     // Push to history before committing
     push({
-      label: `Edited text`, description: 'Edit text',
+      label: `Edited text`,
       targetIds: objectId ? [objectId] : [],
-      undo: () => {
-        const p = pdfDocument.getPage(pageIndex);
-        if (!p) return;
-        const o = p.getObjects().texts.find((t: any) => t.getId() === objectId);
-        if (o) o.setContent(originalContent);
-        useDocumentStore.getState().setDirty(true);
-      },
-      redo: () => {
-        const p = pdfDocument.getPage(pageIndex);
-        if (!p) return;
-        const o = p.getObjects().texts.find((t: any) => t.getId() === objectId);
-        if (o) o.setContent(newContent);
-        useDocumentStore.getState().setDirty(true);
-      },
+      type: 'text-edit',
+      previousContent: originalContent,
+      newContent,
+      objectData: { content: newContent, objectRef: obj.getObjectRef() },
     });
 
     obj.setContent(newContent);

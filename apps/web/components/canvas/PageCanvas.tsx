@@ -254,10 +254,10 @@ export const PageCanvas = memo(function PageCanvas({
         content: '',
       };
       useHistoryStore.getState().push({
-        label: 'Add sticky note', description: 'Add sticky note',
+        label: 'Add sticky note',
         targetIds: [id],
-        undo: () => useDocumentStore.getState().removeAnnotation(id),
-        redo: () => useDocumentStore.getState().addAnnotation(newSticky),
+        type: 'annotation-add',
+        objectData: newSticky,
       });
       addAnnotation(newSticky);
       setDirty(true);
@@ -273,10 +273,10 @@ export const PageCanvas = memo(function PageCanvas({
         content: '', author: 'You', timestamp: Date.now(),
       };
       useHistoryStore.getState().push({
-        label: 'Add comment', description: 'Add comment',
+        label: 'Add comment',
         targetIds: [id],
-        undo: () => useDocumentStore.getState().removeAnnotation(id),
-        redo: () => useDocumentStore.getState().addAnnotation(newComment),
+        type: 'annotation-add',
+        objectData: newComment,
       });
       addAnnotation(newComment);
       setDirty(true);
@@ -291,10 +291,10 @@ export const PageCanvas = memo(function PageCanvas({
         color: toolOptions.color, opacity: toolOptions.opacity,
       };
       useHistoryStore.getState().push({
-        label: `Add ${activeTool}`, description: `Add ${activeTool}`,
+        label: `Add ${activeTool}`,
         targetIds: [id],
-        undo: () => useDocumentStore.getState().removeAnnotation(id),
-        redo: () => useDocumentStore.getState().addAnnotation(newMark),
+        type: 'annotation-add',
+        objectData: newMark,
       });
       addAnnotation(newMark);
       setDirty(true);
@@ -315,10 +315,10 @@ export const PageCanvas = memo(function PageCanvas({
         rotation: 0, objectRef: 'new',
       };
       useHistoryStore.getState().push({
-        label: 'Add text', description: 'Add text',
+        label: 'Add text',
         targetIds: [id],
-        undo: () => useDocumentStore.getState().removeTextObject(id),
-        redo: () => useDocumentStore.getState().addTextObject(newObj),
+        type: 'text-add',
+        objectData: newObj,
       });
       useDocumentStore.getState().addTextObject(newObj);
       setDirty(true);
@@ -339,10 +339,10 @@ export const PageCanvas = memo(function PageCanvas({
           const id = `img-${Date.now()}`;
           const newObj = { id, pageIndex, x: pos.x, y: pos.y, width: 200, height: 150, src, opacity: 1, rotation: 0, objectRef: '' };
           useHistoryStore.getState().push({
-            label: 'Add image', description: 'Add image',
+            label: 'Add image',
             targetIds: [id],
-            undo: () => useDocumentStore.getState().removeImageObject(id),
-            redo: () => useDocumentStore.getState().addImageObject(newObj),
+            type: 'image-add',
+            objectData: newObj,
           });
           addImageObject(newObj);
           setDirty(true);
@@ -371,10 +371,10 @@ export const PageCanvas = memo(function PageCanvas({
           src: dataUrl, opacity: 1, rotation: 0,
         };
         useHistoryStore.getState().push({
-          label: 'Add signature', description: 'Add signature',
+          label: 'Add signature',
           targetIds: [id],
-          undo: () => useDocumentStore.getState().removeImageObject(id),
-          redo: () => useDocumentStore.getState().addImageObject(newObj),
+          type: 'image-add',
+          objectData: newObj,
         });
         addImageObject(newObj);
         useDocumentStore.getState().setPendingSignature(null);
@@ -446,10 +446,10 @@ export const PageCanvas = memo(function PageCanvas({
         imageData,
       };
       useHistoryStore.getState().push({
-        label: 'Draw stroke', description: 'Draw stroke',
+        label: 'Draw stroke',
         targetIds: [id],
-        undo: () => useDocumentStore.getState().removeAnnotation(id),
-        redo: () => useDocumentStore.getState().addAnnotation(newAnnotation),
+        type: 'annotation-add',
+        objectData: newAnnotation,
       });
       addAnnotation(newAnnotation);
       drawingPointsRef.current = [];
@@ -470,10 +470,10 @@ export const PageCanvas = memo(function PageCanvas({
         strokeWidth: toolOptions.strokeWidth ?? 2,
       };
       useHistoryStore.getState().push({
-        label: `Add ${activeTool}`, description: `Add ${activeTool}`,
+        label: `Add ${activeTool}`,
         targetIds: [id],
-        undo: () => useDocumentStore.getState().removeAnnotation(id),
-        redo: () => useDocumentStore.getState().addAnnotation(newAnn),
+        type: 'annotation-add',
+        objectData: newAnn,
       });
       addAnnotation(newAnn);
       setShapePreview(null);
