@@ -446,6 +446,10 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-col h-screen bg-bg-base overflow-hidden">
+      {/* Skip to main content — visible to screen readers, hidden visually */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded">
+        Skip to main content
+      </a>
       {/* Full-canvas loading overlay */}
       {isLoading && (
         <div className="fixed inset-0 z-50 bg-bg-primary/80 backdrop-blur-sm flex items-center justify-center">
@@ -461,6 +465,7 @@ export function EditorPage() {
         {/* Canvas area */}
         <div
           ref={containerRef}
+          id="main-content"
           className="flex-1 overflow-auto bg-bg-base relative"
           style={{ touchAction: 'none' }}
           role="application"

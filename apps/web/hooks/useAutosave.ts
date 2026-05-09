@@ -5,7 +5,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useHistoryStore } from "@/stores/historyStore";
 import { useUIStore } from "@/stores/uiStore";
 import { exportPdfWithChanges } from "./usePdfExporter";
-import { AUTOSAVE_DELAY_MS } from "@/lib/constants";
+import { AUTOSAVE_DEBOUNCE_MS, AUTOSAVE_JITTER_MS } from "@/lib/constants";
 
 const DB_NAME = "pagecraft";
 const DB_VERSION = 4; // Bump version; adds overlay store for Zustand-only objects
@@ -59,6 +59,10 @@ async function getDb(): Promise<IDBPDatabase> {
 const tabId = typeof window !== "undefined" ? crypto.randomUUID() : "server";
 
 let broadcastChannel: BroadcastChannel | null = null;
+let localStorageFallback = false;
+
+// BroadcastChannel fallback: localStorage polling for browsers that don't support it (#25)
+const STORAGE_KEY = 'pdf-autosave-sync';
 
 function getBroadcastChannel(): BroadcastChannel | null {
   if (typeof window === "undefined") return null;
@@ -66,7 +70,8 @@ function getBroadcastChannel(): BroadcastChannel | null {
     try {
       broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
     } catch {
-      console.warn("[Autosave] BroadcastChannel not supported");
+      console.warn("[Autosave] BroadcastChannel not supported, using localStorage fallback");
+      localStorageFallback = true;
       return null;
     }
   }
@@ -181,6 +186,11 @@ export function useAutosave() {
     const channel = getBroadcastChannel();
     if (channel) {
       channel.postMessage({ type: "saved", lastModified, tabId } as BroadcastMessage);
+    } else if (localStorageFallback) {
+      // Fallback: write to localStorage for cross-tab polling (#25)
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ type: "saved", lastModified, tabId }));
+      } catch {}
     }
   }, []);
 
@@ -233,7 +243,7 @@ export function useAutosave() {
         console.error("[Autosave] failed:", err);
         setSaveStatus('offline');
       }
-    }, AUTOSAVE_DELAY_MS);
+    }, AUTOSAVE_DEBOUNCE_MS + Math.random() * AUTOSAVE_JITTER_MS * 2 - AUTOSAVE_JITTER_MS);
 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -308,7 +318,34 @@ export function useAutosaveConflict() {
   // Listen for broadcasts from other tabs
   useEffect(() => {
     const channel = getBroadcastChannel();
-    if (!channel) return;
+    if (!channel) {
+      // Fallback for browsers without BroadcastChannel: use localStorage polling (#25)
+      if (!localStorageFallback) return;
+      const handler = (e: StorageEvent) => {
+        if (e.key !== STORAGE_KEY || !e.newValue) return;
+        try {
+          const msg = JSON.parse(e.newValue) as BroadcastMessage;
+          if (msg.tabId === tabId) return;
+          if (msg.type === "saved" && lastLoadedAt > 0) {
+            hasExternalModification().then((isExternal) => {
+              if (isExternal && !hasConflict) {
+                loadAutosavedDocument().then((saved) => {
+                  if (saved) {
+                    setConflictData({ data: saved.data, name: saved.name, lastModified: saved.lastModified });
+                    setHasConflict(true);
+                  }
+                });
+              }
+            });
+          } else if (msg.type === "cleared") {
+            setHasConflict(false);
+            setConflictData(null);
+          }
+        } catch {}
+      };
+      window.addEventListener('storage', handler);
+      return () => window.removeEventListener('storage', handler);
+    }
 
     const handleMessage = async (event: MessageEvent<BroadcastMessage>) => {
       const msg = event.data;

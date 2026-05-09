@@ -13,7 +13,8 @@ export const PAGE_SIZES: Record<string, { width: number; height: number }> = {
 export const CANVAS_PPI = 96;
 export const PDF_DPI = 72;
 
-export const AUTOSAVE_DELAY_MS = 5000;
+export const AUTOSAVE_DEBOUNCE_MS = 5000;
+export const AUTOSAVE_JITTER_MS = 500; // added jitter to prevent thundering herd
 export const WORKER_MESSAGE_TIMEOUT_MS = 30000;
 
 export const TOOLS = [

@@ -6,6 +6,13 @@ import { cn } from "@/lib/utils";
 interface SignaturePadProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Called when user saves a signature. The data (dataUrl) is stored in the
+   * Zustand store (pendingSignature / formFieldValues) and persists locally.
+   * NOTE: At present the signature is NOT applied to the actual PDF file — it is
+   * saved locally only and available for form-field signing workflows. This comment
+   * should be updated when proper PDF signature injection is implemented (ref SPEC.md).
+   */
   onSave: (dataUrl: string, width: number, height: number) => void;
 }
 

@@ -55,11 +55,13 @@ export function MobileBottomSheet() {
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
-        {/* Drag handle */}
+        {/* Drag handle — 64×8px minimum touch target per iOS HIG (#15) */}
         <div className="flex justify-center py-2">
           <button
             onClick={() => setMobileBottomSheet(!mobileBottomSheetOpen)}
-            className="w-10 h-1 rounded-full bg-border-strong"
+            className="w-16 h-2 rounded-full bg-border-strong"
+            style={{ minHeight: '8px' }}
+            aria-label="Toggle bottom sheet"
           />
         </div>
 
