@@ -403,7 +403,9 @@ export function useAutosaveConflict() {
   const resolveKeep = useCallback(() => {
     setHasConflict(false);
     setConflictData(null);
-    // The next autosave will overwrite the external change with our current state
+    // Mark document dirty so the next autosave will overwrite the external change
+    // with our current local state, making the local version canonical
+    useDocumentStore.getState().setDirty(true);
   }, []);
 
   return {
@@ -422,14 +424,13 @@ export async function checkConflictOnLoad(): Promise<{
   const saved = await loadAutosavedDocument();
   if (!saved) return { hasConflict: false, savedData: null };
 
-  // Update lastLoadedAt to now (we've just loaded)
-  setLastLoadedAt(Date.now());
-
   // Check if there was an external modification since we opened
+  // Note: external=true means IndexedDB was modified by another tab while we had the doc open
+  // On a fresh load with no prior lastLoadedAt, this will be false (correct — no conflict on initial load)
   const external = await hasExternalModification();
-  // Note: external=true means IndexedDB was modified AFTER our lastLoadedAt
-  // But since we just set lastLoadedAt=now, external should be false on fresh load
-  // The conflict check is more relevant when another tab broadcasts while we're editing
+
+  // Only set lastLoadedAt AFTER the conflict check — don't contaminate the check with "now"
+  setLastLoadedAt(Date.now());
 
   return { hasConflict: external, savedData: saved };
 }

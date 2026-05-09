@@ -124,7 +124,7 @@ export class PdfParser {
     const map = new Map<number, ParsedTextObject[]>();
     const CHUNK_SIZE = 10;
 
-    // Helper to yield to main thread
+    // Process chunk of pages
     const yieldToMain = (): Promise<void> => {
       return new Promise((resolve) => {
         const idleCallback =

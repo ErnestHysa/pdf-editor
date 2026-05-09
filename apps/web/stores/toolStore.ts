@@ -20,6 +20,8 @@ export interface ToolOptions {
   highlightColor?: string;
   // Draw
   brushSize?: number;
+  // Sticky note
+  stickyColor?: string;
 }
 
 interface ToolState {
@@ -46,6 +48,7 @@ const defaultOptions: ToolOptions = {
   fillColor: 'transparent',
   highlightColor: '#C97B3E',
   brushSize: 2,
+  stickyColor: '#FFEB3B',
 };
 
 export const useToolStore = create<ToolState>()(

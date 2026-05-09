@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { PdfDocument } from '@pagecraft/pdf-engine';
 import { useHistoryStore } from './historyStore';
+import { useUIStore } from './uiStore';
 
 // ── Annotation types ────────────────────────────────────────────
 
@@ -169,6 +170,8 @@ export interface DocumentState {
   duplicateSelected: () => void;
   setActivePage: (index: number) => void;
   forceReload: () => void;
+  /** Reload the document from a raw ArrayBuffer (used by conflict resolution to reload external changes) */
+  reloadFromBuffer: (buffer: ArrayBuffer, fileName?: string, fileSize?: number) => Promise<void>;
   addPartialReload: (pageIndex: number) => void;
   setTextObjects: (objects: SerializableTextObject[]) => void;
   setImageObjects: (objects: SerializableImageObject[]) => void;
@@ -243,6 +246,13 @@ const initialState = {
   searchCurrentMatchIndex: 0,
 };
 
+/** Compute SHA-256 hash of a buffer for stable document identity */
+async function computeHash(buffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export const useDocumentStore = create<DocumentState>()(
   immer((set) => ({
     ...initialState,
@@ -292,6 +302,28 @@ export const useDocumentStore = create<DocumentState>()(
         state.pdfJsDoc = null;
         state.targetedReloads = {};
       }),
+    reloadFromBuffer: async (buffer: ArrayBuffer, fileName = "Untitled.pdf", fileSize = 0) => {
+      // Dynamically import PdfEngine to avoid circular dependency at module load time
+      const { PdfEngine } = await import('@pagecraft/pdf-engine');
+      const engine = new PdfEngine();
+      const doc = await engine.load(buffer);
+      const docId = await computeHash(buffer);
+      set((state) => {
+        state.pdfDocument = doc;
+        state.fileName = fileName;
+        state.fileSize = fileSize;
+        state.docId = docId;
+        state.isDirty = false;
+        state.saveStatus = 'idle';
+        state.lastSavedAt = null;
+        state.selectedObjects = [];
+        state.activePageIndex = 0;
+        state.textObjects = [];
+        state.pdfJsDoc = null;
+        state.reloadTrigger = state.reloadTrigger + 1;
+        state.targetedReloads = {};
+      });
+    },
     addPartialReload: (pageIndex) =>
       set((state) => {
         state.targetedReloads[pageIndex] = Date.now();
@@ -355,7 +387,10 @@ export const useDocumentStore = create<DocumentState>()(
       const doc = useDocumentStore.getState().pdfDocument;
       if (!doc) return;
       const count = doc.getPageCount();
-      if (count <= 1) return;
+      if (count <= 1) {
+        useUIStore.getState().setToast('Cannot delete the last page');
+        return;
+      }
       const currentActive = useDocumentStore.getState().activePageIndex;
       doc.removePage(index);
       set((state) => {

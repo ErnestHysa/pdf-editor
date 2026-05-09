@@ -307,7 +307,7 @@ function validateFromStore(targetIds: string[], type: HistoryActionType): boolea
 export const useHistoryStore = create<HistoryState>((set, get) => ({
   actions: [],
   pointer: -1,
-  maxSize: 100,
+  maxSize: 200,
   skippedReason: null,
 
   push: (data) =>
