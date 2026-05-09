@@ -2,7 +2,7 @@
 import { PDFDocument, PDFName, PDFDict, PDFString, PDFObject, PDFArray, PDFRef, rgb, StandardFonts, degrees, PDFOperator, PDFPage } from "pdf-lib";
 import { useDocumentStore } from "@/stores/documentStore";
 import { createNativeAnnotation, hexToRgbArray } from "@/lib/pdf/annotationBuilder";
-import { parseHexColor } from "@/lib/pdf/textExtractor";
+import { parseHexColor, lightenColor } from "@/lib/pdf/textExtractor";
 import { glyphPreservingEdit } from "@/lib/pdf/glyphEditor";
 import { optimizePdfStandard } from "@/lib/pdf/optimizer";
 
@@ -428,8 +428,11 @@ case 'arrow': {
         case 'comment': {
           const content = (ann as { content?: string }).content ?? '';
           const author = (ann as { author?: string }).author ?? 'Anonymous';
-          // Use annotation color for background (not hardcoded yellow)
+          // Use annotation color for border
           const bgColor = parseHexColor(ann.color);
+          // Use a lightened version of the annotation color for the fill, falling back
+          // to neutral light gray if the color is invalid. (#26)
+          const fillColor = lightenColor(ann.color || '#ffffff', 0.75);
           // Dynamic font size based on content length and annotation dimensions
           const minDim = Math.min(ann.width, ann.height);
           const commentFontSize = Math.max(7, Math.min(minDim * 0.3, 12));
@@ -447,7 +450,7 @@ case 'arrow': {
             height: ann.height,
             borderColor: bgColor,
             borderWidth: 1,
-            color: rgb(1, 1, 0.95),
+            color: fillColor,
             opacity,
           });
           let font;
@@ -538,6 +541,11 @@ export async function exportPageAsImage(
 
   const page = await pdfJsDoc.getPage(pageIndex + 1);
   const viewport = page.getViewport({ scale: 2 }); // 2x for retina
+
+  // Guard against zero-dimension pages (#23)
+  if (viewport.width === 0 || viewport.height === 0) {
+    return Promise.reject(new Error(`Cannot export page ${pageIndex + 1}: page has zero dimensions (width=${viewport.width}, height=${viewport.height}). This may indicate a corrupt or still-loading page.`));
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = viewport.width;

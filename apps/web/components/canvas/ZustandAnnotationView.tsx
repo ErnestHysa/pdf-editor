@@ -55,11 +55,23 @@ export function ZustandAnnotationView({
   }
 
   if (annotation.type === 'sticky') {
+    // Derive readable text color from annotation color (dark on light, light on dark)
+    const annColor = annotation.color ?? '#fef08a';
+    const textColor = annColor.startsWith('#')
+      ? (() => {
+          const r = parseInt(annColor.slice(1, 3), 16);
+          const g = parseInt(annColor.slice(3, 5), 16);
+          const b = parseInt(annColor.slice(5, 7), 16);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          return luminance > 0.6 ? '#92400e' : '#fef9c3';
+        })()
+      : '#92400e';
+
     if (isEditing) {
       return (
         <textarea
-          className="w-full h-full p-2 rounded text-xs resize-none bg-yellow-50 border-2 border-yellow-400"
-          style={{ color: '#92400e' }}
+          className="w-full h-full p-2 rounded text-xs resize-none border-2"
+          style={{ backgroundColor: annColor, color: textColor, borderColor: textColor }}
           value={stickyText}
           onChange={(e) => setStickyText(e.target.value)}
           onBlur={() => { onStickyEdit(stickyText); setStickyText(''); }}
@@ -74,7 +86,7 @@ export function ZustandAnnotationView({
     return (
       <div
         className="w-full h-full p-2 rounded shadow text-xs overflow-hidden"
-        style={{ backgroundColor: annotation.color, color: '#92400e' }}
+        style={{ backgroundColor: annColor, color: textColor }}
         role="button"
         aria-label={`Sticky note: ${annotation.content || 'empty'}. Double-click to edit.`}
         tabIndex={0}

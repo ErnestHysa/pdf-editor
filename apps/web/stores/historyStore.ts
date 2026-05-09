@@ -244,11 +244,15 @@ function buildExecuteRedo(data: HistoryActionData): () => void {
         });
         break;
       case 'page-add':
-        // NOTE: This assumes the page was inserted immediately after the original page index.
-        // If the document structure has changed (e.g., pages reordered or deleted), the
-        // pageIndex may no longer be valid. Consider validating pageIndex < doc.getPageCount()
-        // before calling addPage. (#14)
-        store.addPage(data.pageIndex ?? -1);
+        // Bounds check: verify the target pageIndex is within valid range before executing.
+        // If pages were reordered or deleted since this action was recorded, pageIndex
+        // may be stale. Guard to prevent operating on an invalid index. (#24)
+        if (data.pageIndex !== undefined) {
+          const doc = useDocumentStore.getState().pdfDocument;
+          if (doc && data.pageIndex >= 0 && data.pageIndex < doc.getPageCount()) {
+            store.addPage(data.pageIndex ?? -1);
+          }
+        }
         break;
       case 'page-delete':
         if (data.pageIndex !== undefined) {
@@ -256,12 +260,13 @@ function buildExecuteRedo(data: HistoryActionData): () => void {
         }
         break;
       case 'page-duplicate':
-        // NOTE: This assumes the duplicate was inserted immediately after the original page.
-        // If pages have been reordered or deleted since this action was recorded, the
-        // pageIndex may be stale. Consider validating that pageIndex+1 < doc.getPageCount()
-        // before calling duplicatePage. (#14)
+        // Bounds check: verify pageIndex+1 is within valid range before executing.
+        // The duplicate is inserted after pageIndex, so we need pageIndex+1 to be valid. (#24)
         if (data.pageIndex !== undefined) {
-          store.duplicatePage(data.pageIndex);
+          const doc = useDocumentStore.getState().pdfDocument;
+          if (doc && data.pageIndex >= 0 && data.pageIndex + 1 < doc.getPageCount()) {
+            store.duplicatePage(data.pageIndex);
+          }
         }
         break;
       case 'page-reorder':

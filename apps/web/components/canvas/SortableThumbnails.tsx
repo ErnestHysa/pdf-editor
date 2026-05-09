@@ -75,6 +75,12 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
     setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
+  const handleKebabClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setContextMenu({ x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+  }, []);
+
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
@@ -167,6 +173,15 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
         <span className="absolute bottom-0.5 right-1.5 text-2xs font-mono text-text-tertiary bg-bg-elevated/80 px-1 rounded z-10">
           {pageIndex + 1}
         </span>
+        <button
+          className="absolute bottom-0.5 left-1 text-text-tertiary hover:text-text-primary z-10 p-0.5 rounded"
+          onClick={handleKebabClick}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleKebabClick(e as unknown as React.MouseEvent); } }}
+          aria-label={`Page ${pageIndex + 1} options`}
+          tabIndex={0}
+        >
+          <MoreHorizontal size={12} />
+        </button>
         {isDragOverlay && (
           <div className="absolute inset-0 border-2 border-accent/50 rounded" />
         )}

@@ -263,6 +263,10 @@ export function useAutosave() {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
+    // NOTE: Store actions (setDirty, setSaveStatus, setLastSavedAt) are stable references
+    // from Zustand and do not change between renders. Adding them as deps avoids
+    // the "unstable reference" lint warning but does NOT reset the timer because
+    // the action references remain stable. (#25)
   }, [pdfDocument, isDirty, fileName, setDirty, setSaveStatus, setLastSavedAt, broadcastSave]);
 }
 

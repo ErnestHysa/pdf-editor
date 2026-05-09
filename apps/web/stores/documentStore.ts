@@ -38,7 +38,7 @@ export interface HighlightAnnotation extends BaseAnnotation {
 
 export interface LineAnnotation extends BaseAnnotation {
   type: 'underline' | 'strikethrough';
-  fontSize: number;
+  strokeWidth?: number;
 }
 
 export interface StickyAnnotation extends BaseAnnotation {
@@ -150,8 +150,13 @@ export interface DocumentState {
   activePageIndex: number;
   reloadTrigger: number; // incremented to force full pdf.js reload (all pages)
   // Per-page targeted reload: pageIndex → timestamp (epoch ms)
-  // When a page is edited, set the timestamp; when it changes, re-render only that page
+  // When a page is edited, set the timestamp; when it changes, re-render only that page.
+  // NOTE: After the canvas picks up targetedReloads[pageIndex] it should call
+  // clearPartialReload(pageIndex) to avoid stale-entry accumulation.
   targetedReloads: Record<number, number>;
+  // Parsing progress (0-100) — updated during parseAllPages so UI can show "Parsing X of Y"
+  // TODO: UI is not yet wired up to display this value.
+  parsingProgress: number;
   clipboard: SerializableTextObject[]; // copied text objects for paste
   annotations: AnnotationObject[]; // R35-R42 annotation objects
 
@@ -173,6 +178,8 @@ export interface DocumentState {
   /** Reload the document from a raw ArrayBuffer (used by conflict resolution to reload external changes) */
   reloadFromBuffer: (buffer: ArrayBuffer, fileName?: string, fileSize?: number) => Promise<void>;
   addPartialReload: (pageIndex: number) => void;
+  /** Clears the targeted reload timestamp for the given page after the canvas consumes it. (#27) */
+  clearPartialReload: (pageIndex: number) => void;
   setTextObjects: (objects: SerializableTextObject[]) => void;
   setImageObjects: (objects: SerializableImageObject[]) => void;
   setAnnotations: (annotations: AnnotationObject[]) => void;
@@ -244,6 +251,7 @@ const initialState = {
   searchQuery: '',
   searchActiveMatches: [],
   searchCurrentMatchIndex: 0,
+  parsingProgress: 0,
 };
 
 /** Compute SHA-256 hash of a buffer for stable document identity */
@@ -327,6 +335,12 @@ export const useDocumentStore = create<DocumentState>()(
     addPartialReload: (pageIndex) =>
       set((state) => {
         state.targetedReloads[pageIndex] = Date.now();
+      }),
+    clearPartialReload: (pageIndex) =>
+      set((state) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { [pageIndex]: _removed, ...rest } = state.targetedReloads;
+        state.targetedReloads = rest;
       }),
     setTextObjects: (objects) =>
       set((state) => {
