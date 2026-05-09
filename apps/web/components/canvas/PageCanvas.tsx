@@ -323,7 +323,7 @@ export const PageCanvas = memo(function PageCanvas({
         fontWeight: toolOptions.fontWeight ?? 'normal',
         fontStyle: toolOptions.fontStyle ?? 'normal',
         textAlign: toolOptions.textAlign ?? 'left',
-        color: toolOptions.textColor ?? '#F0EDE8',
+        color: toolOptions.textColor ?? '#000000',
         rotation: 0, objectRef: 'new',
       };
       useHistoryStore.getState().push({
@@ -339,7 +339,10 @@ export const PageCanvas = memo(function PageCanvas({
     }
 
     if (activeTool === 'image') {
+      // Guard: only open file dialog once per tool activation, not on every pointer down
+      if ((e.target as HTMLElement).closest('[data-image-guard]')) return;
       const input = document.createElement('input');
+      input.setAttribute('data-image-guard', 'true');
       input.type = 'file';
       input.accept = 'image/*';
       input.onchange = (ev) => {
@@ -367,7 +370,10 @@ export const PageCanvas = memo(function PageCanvas({
 
     if (activeTool === 'signature') {
       const { pendingSignature } = useDocumentStore.getState();
-      if (pendingSignature) {
+      if (!pendingSignature) {
+        useUIStore.getState().setToast('No signature pending — draw or upload one first');
+        return;
+      }
         const { dataUrl, width, height } = pendingSignature;
         const id = `sig-${Date.now()}`;
         // Scale signature to a reasonable display width (max 200pt wide)
@@ -392,7 +398,6 @@ export const PageCanvas = memo(function PageCanvas({
         useDocumentStore.getState().setPendingSignature(null);
         useToolStore.getState().setTool('select');
         setDirty(true);
-      }
       return;
     }
 
