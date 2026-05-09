@@ -2,7 +2,9 @@
 import { PDFDocument, PDFName, PDFDict, PDFString, PDFRef, PDFPage } from "pdf-lib";
 
 /**
- * Parse hex color to [r, g, b] array in 0-1 range
+ * Parse hex color to [r, g, b] array in 0-1 range.
+ * On parse error: logs a console.error and returns black [0,0,0] as a
+ * visible failure indicator rather than silently defaulting to yellow.
  */
 export function hexToRgbArray(hex: string): [number, number, number] {
   try {
@@ -12,7 +14,8 @@ export function hexToRgbArray(hex: string): [number, number, number] {
     const b = parseInt(clean.slice(4, 6), 16) / 255;
     return [r, g, b];
   } catch {
-    return [1, 1, 0];
+    console.error(`[hexToRgbArray] Failed to parse hex color "${hex}" — defaulting to black`);
+    return [0, 0, 0];
   }
 }
 

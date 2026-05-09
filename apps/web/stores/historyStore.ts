@@ -315,7 +315,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       const actions = state.actions.slice(0, state.pointer + 1);
 
       const newAction: HistoryAction = {
-        id: Math.random().toString(36).slice(2),
+        id: crypto.randomUUID(),
         data,
         timestamp: Date.now(),
         validate: () => validateFromStore(data.targetIds, data.type),

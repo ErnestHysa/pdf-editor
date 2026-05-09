@@ -356,6 +356,7 @@ export const useDocumentStore = create<DocumentState>()(
         const idx = state.textObjects.findIndex((o) => o.id === id);
         if (idx !== -1) {
           state.textObjects[idx] = { ...state.textObjects[idx], ...updates } as SerializableTextObject;
+          state.isDirty = true;
         }
       }),
     addToSelection: (obj) =>
@@ -525,9 +526,12 @@ export const useDocumentStore = create<DocumentState>()(
       const count: number = await doc.insertPagesFromFile(file, afterIndex);
       if (count === 0) return 0;
 
+      // Issue #8: clear pdfJsDoc to force a full pdf.js reload so canvases
+      // render the newly inserted pages (not just incrementing reloadTrigger)
       set((state) => {
         state.isDirty = true;
         state.reloadTrigger += 1;
+        state.pdfJsDoc = null;
       });
       return count;
     },

@@ -1,8 +1,8 @@
 'use client';
 import { useCallback, useRef } from 'react';
 import { useDocumentStore } from '@/stores/documentStore';
+import { useUIStore } from '@/stores/uiStore';
 import { useHistoryStore } from '@/stores/historyStore';
-import { TextObject } from '@pagecraft/pdf-engine';
 import { glyphPreservingEdit } from '@/lib/pdf/glyphEditor';
 
 interface TextEditState {
@@ -41,9 +41,9 @@ export function useTextEditor() {
       objectData: { content: newContent, objectId },
     });
 
-    // Update Zustand overlay — the overlay approach is the primary editing
-    // mechanism. The engine's texts array (page.getObjects().texts) may not
-    // be populated from PdfParser, so we use the Zustand textObjects path.
+    // Update Zustand overlay — the primary editing mechanism.
+    // The engine's texts array may not be populated from PdfParser,
+    // so we use the Zustand textObjects path.
     const store = useDocumentStore.getState();
     if (objectId) {
       const existing = store.textObjects.find(t => t.id === objectId);
@@ -54,9 +54,11 @@ export function useTextEditor() {
         const page = pdfDocument.getPage(pageIndex);
         const obj = page?.getObjects().texts.find((t: any) => t.getId() === objectId);
         if (obj) {
-          obj.setContent(newContent);
           const success = glyphPreservingEdit(pageIndex, obj.getObjectRef(), originalContent, newContent);
-          if (!success) return false; // Only set dirty if glyphPreservingEdit succeeded
+          if (!success) {
+            useUIStore.getState().setToast('Text edit failed — glyphs could not be preserved');
+            return false;
+          }
         } else {
           return false; // No object found to update
         }

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useRef, memo } from "react";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   DndContext,
@@ -106,7 +106,7 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
     closeContextMenu();
   }, [pageIndex, cropPage, closeContextMenu]);
 
-  // Render thumbnail via pdf.js — memoized to avoid re-renders
+  // Render thumbnail via pdf.js
   const renderThumbnail = useCallback(async () => {
     if (!canvasRef.current || !pdfJsDoc) return;
     try {
@@ -125,12 +125,12 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
     }
   }, [pdfJsDoc, pageIndex, width, height, thumbWidth]);
 
-  // Render when pdfJsDoc changes
-  const prevPdfJsDocRef = useRef(pdfJsDoc);
-  if (pdfJsDoc !== prevPdfJsDocRef.current) {
-    prevPdfJsDocRef.current = pdfJsDoc;
+  // Issue #5: render via useEffect instead of ref comparison in render body.
+  // The ref comparison (pdfJsDoc !== prevPdfJsDocRef.current) fires during
+  // render which bypasses React's scheduler — useEffect schedules it properly.
+  useEffect(() => {
     renderThumbnail();
-  }
+  }, [pdfJsDoc, pageIndex, renderThumbnail]);
 
   return (
     <>

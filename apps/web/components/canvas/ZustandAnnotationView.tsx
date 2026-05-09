@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { AnnotationObject as ZustandAnnotation } from '@/stores/documentStore';
 
 interface Props {
@@ -85,9 +85,19 @@ export function ZustandAnnotationView({
   }
 
   if (annotation.type === 'comment') {
-    const commentNumber = pageAnnotations
-      .filter((a) => a.type === 'comment')
-      .findIndex((a) => a.id === annotation.id) + 1;
+    // Issue #7: Build comment number map once per render via useMemo (was O(n²) per render)
+    const commentIndexMap = useMemo(() => {
+      const map = new Map<string, number>();
+      let num = 0;
+      for (const a of pageAnnotations) {
+        if (a.type === 'comment') {
+          num++;
+          map.set(a.id, num);
+        }
+      }
+      return map;
+    }, [pageAnnotations]);
+    const commentNumber = commentIndexMap.get(annotation.id) ?? 0;
     const isActive = activeCommentId === annotation.id;
 
     return (

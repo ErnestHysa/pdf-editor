@@ -197,10 +197,14 @@ export const PageCanvas = memo(function PageCanvas({
 
   // ── Draw freehand strokes when annotations change ─────────────────
   useEffect(() => {
-    cancelledRef.current = false;
+    // Mark previous callbacks as cancelled at the START of the effect
+    // so a new render cancels any in-flight onload handlers from the prior render
+    cancelledRef.current = true;
     const canvas = drawCanvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
+    // Reset flag for this run
+    cancelledRef.current = false;
     drawCanvasCtxRef.current = ctx;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const drawingAnnotations = annotations.filter(
@@ -209,12 +213,16 @@ export const PageCanvas = memo(function PageCanvas({
     for (const ann of drawingAnnotations) {
       const img = new Image();
       img.onload = () => {
+        // Check cancelled flag BEFORE drawing — discards stale callbacks
         if (cancelledRef.current || !drawCanvasCtxRef.current) return;
         drawCanvasCtxRef.current.drawImage(img, ann.x * renderScale, ann.y * renderScale,
           ann.width * renderScale, ann.height * renderScale);
+        // Revoke the object URL after the callback fires so the browser can release memory
+        URL.revokeObjectURL(img.src);
       };
       img.src = (ann as any).imageData ?? '';
     }
+    // Cleanup sets cancelled flag so any in-flight onload is skipped
     return () => {
       cancelledRef.current = true;
     };
