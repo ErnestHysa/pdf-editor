@@ -405,15 +405,35 @@ export const useDocumentStore = create<DocumentState>()(
         } else if (index === currentActive) {
           state.activePageIndex = Math.min(currentActive, newCount - 1);
         }
-        // Clear selections on deleted page
+        // #16: Clear selection for objects on the deleted page; re-index all object arrays
         state.selectedObjects = state.selectedObjects.filter(
-          (o) => o.pageIndex !== index && o.pageIndex < index
+          (o) => o.pageIndex !== index
         );
-        // Re-index page indices greater than deleted index
         state.selectedObjects = state.selectedObjects.map((o) => ({
           ...o,
           pageIndex: o.pageIndex > index ? o.pageIndex - 1 : o.pageIndex,
         }));
+        // Re-index textObjects
+        state.textObjects = state.textObjects
+          .filter((o) => o.pageIndex !== index)
+          .map((o) => ({
+            ...o,
+            pageIndex: o.pageIndex > index ? o.pageIndex - 1 : o.pageIndex,
+          }));
+        // Re-index imageObjects
+        state.imageObjects = state.imageObjects
+          .filter((o) => o.pageIndex !== index)
+          .map((o) => ({
+            ...o,
+            pageIndex: o.pageIndex > index ? o.pageIndex - 1 : o.pageIndex,
+          }));
+        // Re-index annotations
+        state.annotations = state.annotations
+          .filter((a) => a.pageIndex !== index)
+          .map((a) => ({
+            ...a,
+            pageIndex: a.pageIndex > index ? a.pageIndex - 1 : a.pageIndex,
+          }));
         // Targeted reload for the affected region (all pages shift)
         state.targetedReloads = {};
         for (let i = 0; i < newCount; i++) {
@@ -512,6 +532,9 @@ export const useDocumentStore = create<DocumentState>()(
         const pdfY = pageHeight - bounds.y - bounds.height; // Convert Y from top-left to bottom-left
         page.setCropBox(pdfX, pdfY, bounds.width, bounds.height);
       }
+
+      // #11: Add partial reload to trigger canvas re-render after direct pdf-lib mutation
+      useDocumentStore.getState().addPartialReload(index);
 
       set((state) => {
         state.isDirty = true;

@@ -160,11 +160,10 @@ export class PdfParser {
   }
 
   getPageDimensions(pageIndex: number): { width: number; height: number } {
-    // Synchronous stub — returns approximate dimensions
-    // Use getPageDimensionsAsync for accurate values
+    // #18: Return cached dimension if available, otherwise 0 (callers handle 0)
     const cached = this.pageDimensionsCache.get(pageIndex);
     if (cached) return cached;
-    return { width: 612, height: 792 }; // fallback
+    return { width: 0, height: 0 }; // 0 signals to callers that dimensions are not yet known
   }
 
   private pageDimensionsCache = new Map<number, { width: number; height: number }>();

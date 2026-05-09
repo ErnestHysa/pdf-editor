@@ -4,7 +4,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { createNativeAnnotation, hexToRgbArray } from "@/lib/pdf/annotationBuilder";
 import { parseHexColor } from "@/lib/pdf/textExtractor";
 import { glyphPreservingEdit } from "@/lib/pdf/glyphEditor";
-import { optimizePdf } from "@/lib/pdf/optimizer";
+import { optimizePdfStandard } from "@/lib/pdf/optimizer";
 
 /**
  * C4: Glyph-level text editing for formatting preservation.
@@ -56,7 +56,25 @@ function applyFormFieldValuesToDoc(libDoc: PDFDocument): void {
           fieldDict.set(PDFName.of("V"), newValue ? PDFName.of("Yes") : PDFName.of("Off"));
           fieldDict.set(PDFName.of("AS"), newValue ? PDFName.of("Yes") : PDFName.of("Off"));
         } else {
-          fieldDict.set(PDFName.of("V"), PDFName.of(String(newValue)));
+          // #13: Radio button group handling — track group and enforce exclusivity
+          const newV = PDFName.of(String(newValue));
+          fieldDict.set(PDFName.of("V"), newV);
+          fieldDict.set(PDFName.of("AS"), newV);
+          // Uncheck other buttons in the same radio group (same /G or shared group name)
+          const groupName = fieldDict.get(PDFName.of("G"));
+          if (groupName) {
+            const groupStr = String(groupName);
+            for (const otherRef of fields) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const otherDict = (otherRef as any).lookup?.() ?? otherRef as any;
+              if (!otherDict || otherDict === fieldDict) continue;
+              const otherGroup = otherDict.get?.(PDFName.of("G"));
+              if (otherGroup && String(otherGroup) === groupStr) {
+                otherDict.set(PDFName.of("V"), PDFName.of("Off"));
+                otherDict.set(PDFName.of("AS"), PDFName.of("Off"));
+              }
+            }
+          }
         }
       } else if (typeStr === "/Tx") {
         // Text field — /V is a PDF string
@@ -148,10 +166,10 @@ export async function exportPdfWithChanges(): Promise<Uint8Array> {
           rotate: textObj.rotation ? degrees(textObj.rotation) : degrees(0),
         });
       } else if (textObj.textAlign === "right") {
-        // Approximate right-align by measuring text width (simplified)
-        const approxWidth = text.length * size * 0.6;
+        // Right-align: use pdf-lib's font.widthOfTextAtSize for accurate measurement
+        const textWidth = font.widthOfTextAtSize(text, size);
         page.drawText(text, {
-          x: x - approxWidth,
+          x: x - textWidth,
           y: pdfY,
           size,
           font,
@@ -167,6 +185,42 @@ export async function exportPdfWithChanges(): Promise<Uint8Array> {
           color,
           rotate: textObj.rotation ? degrees(textObj.rotation) : degrees(0),
         });
+      }
+    }
+  }
+
+  // #10: Process user-added Zustand images onto the PDF
+  // TODO: This only handles Zustand-overlay images, not engine images from the PDF itself
+  const { imageObjects: zustandImages } = useDocumentStore.getState();
+  const imageByPage = new Map<number, typeof zustandImages>();
+  for (const obj of zustandImages) {
+    const existing = imageByPage.get(obj.pageIndex) ?? [];
+    existing.push(obj);
+    imageByPage.set(obj.pageIndex, existing);
+  }
+  for (const [pageIndex, images] of Array.from(imageByPage.entries())) {
+    if (pageIndex < 0 || pageIndex >= pages.length) continue;
+    const page = pages[pageIndex];
+    const pageHeight = page.getHeight();
+    for (const imgObj of images) {
+      if (imgObj.src) {
+        try {
+          const imgBytes = await fetch(imgObj.src).then(r => r.arrayBuffer());
+          let embedded;
+          if (imgObj.src.includes('jpeg') || imgObj.src.includes('jpg')) {
+            embedded = await libDoc.embedJpg(imgBytes);
+          } else {
+            embedded = await libDoc.embedPng(imgBytes);
+          }
+          const pdfY = pageHeight - imgObj.y - imgObj.height;
+          page.drawImage(embedded, {
+            x: imgObj.x,
+            y: pdfY,
+            width: imgObj.width,
+            height: imgObj.height,
+            opacity: imgObj.opacity ?? 1,
+          });
+        } catch { /* skip failed images */ }
       }
     }
   }
@@ -467,7 +521,7 @@ export async function exportPdfOptimized(): Promise<Uint8Array> {
 
   const libDoc = pdfDocument.getLibDoc();
   applyFormFieldValuesToDoc(libDoc);
-  return optimizePdf(libDoc);
+  return optimizePdfStandard(libDoc);
 }
 
 /**

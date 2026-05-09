@@ -13,18 +13,26 @@ import { PDFDocument } from "pdf-lib";
  * @param doc - The pdf-lib PDFDocument to optimize
  * @returns Promise resolving to optimized PDF bytes
  */
-export async function optimizePdf(doc: PDFDocument): Promise<Uint8Array> {
+export async function optimizePdfStandard(doc: PDFDocument): Promise<Uint8Array> {
   // pdf-lib's save() already performs optimization like removing unused objects
   // and combining common objects. For explicit control, we flush and re-save.
   return doc.save();
 }
 
 /**
- * S4: Alternative optimized save using save_document() options if available.
- * This applies additional compression options.
+ * S4: Alternative optimized save using FlateDecode recompression.
+ * This applies additional FlateDecode recompression using per-page stream stats.
+ *
+ * NOTE: This is currently a placeholder — the full FlateDecode recompression
+ * approach requires iterating page content streams and re-encoding them.
+ * For now, this falls back to doc.save() which handles basic optimization.
+ *
+ * @param doc - The pdf-lib PDFDocument to optimize
+ * @returns Promise resolving to optimized PDF bytes
  */
-export async function optimizePdfWithCompression(doc: PDFDocument): Promise<Uint8Array> {
-  // pdf-lib save with default optimization is typically sufficient
-  // Additional compression can be applied via custom writer options if needed
+export async function optimizePdfFlate(doc: PDFDocument): Promise<Uint8Array> {
+  // Placeholder: Full FlateDecode recompression would iterate page content streams,
+  // decode existing streams and re-encode them with better compression settings.
+  // pdf-lib's save() with default options already performs basic stream optimization.
   return doc.save();
 }

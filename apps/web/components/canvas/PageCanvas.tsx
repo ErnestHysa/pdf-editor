@@ -94,6 +94,7 @@ export const PageCanvas = memo(function PageCanvas({
   const renderScale = zoom;
 
   // ── Viewport culling: compute visible rect from scroll container ─
+  // #14: panOffset in deps so viewport re-computes immediately on pan
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -124,6 +125,24 @@ export const PageCanvas = memo(function PageCanvas({
       window.removeEventListener('resize', updateViewport);
     };
   }, [zoom, panOffset]);
+
+  // #14: Set viewportRect immediately when panOffset changes (separate from scroll handler)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const scrollEl = container.parentElement;
+    if (!scrollEl) return;
+    // Compute viewport using current scroll position
+    const scrollTop = scrollEl.scrollTop;
+    const scrollLeft = scrollEl.scrollLeft;
+    const clientWidth = scrollEl.clientWidth;
+    const clientHeight = scrollEl.clientHeight;
+    const visX = (scrollLeft - panOffset.x) / zoom;
+    const visY = (scrollTop - panOffset.y) / zoom;
+    const visW = clientWidth / zoom;
+    const visH = clientHeight / zoom;
+    setViewportRect({ x: visX, y: visY, width: visW, height: visH });
+  }, [panOffset, zoom]);
 
   // Returns true if an object at (objX, objY) with size (objW, objH) is visible
   const isObjectVisible = useCallback(
