@@ -16,6 +16,54 @@ export function hexToRgbArray(hex: string): [number, number, number] {
   }
 }
 
+// ── Stamp annotation types ─────────────────────────────────────────
+
+export interface StampAnnotation {
+  id: string;
+  type: 'stamp';
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string; // "APPROVED", "DRAFT", "CONFIDENTIAL"
+  backgroundColor: string;
+  opacity: number;
+}
+
+// Default stamp presets
+export const DEFAULT_STAMPS: Array<{ label: string; backgroundColor: string; color: string }> = [
+  { label: 'APPROVED', backgroundColor: '#4CAF7D', color: '#ffffff' },
+  { label: 'DRAFT', backgroundColor: '#FFC531', color: '#000000' },
+  { label: 'CONFIDENTIAL', backgroundColor: '#E05252', color: '#ffffff' },
+];
+
+/**
+ * Build a stamp annotation with default styling
+ */
+export function buildStampAnnotation(
+  pageIndex: number,
+  x: number,
+  y: number,
+  label: string,
+  backgroundColor: string,
+  width = 120,
+  height = 40,
+): StampAnnotation {
+  return {
+    id: `stamp-${pageIndex}-${Date.now()}`,
+    type: 'stamp',
+    pageIndex,
+    x,
+    y,
+    width,
+    height,
+    label,
+    backgroundColor,
+    opacity: 1,
+  };
+}
+
 /**
  * Creates a real PDF annotation dictionary and registers it in the document.
  * Returns the PDFRef to the annotation, or null on failure.
@@ -24,6 +72,7 @@ export function hexToRgbArray(hex: string): [number, number, number] {
  * - HIGHLIGHT/UNDERLINE/STRIKETHROUGH: /QuadPoints for precise text markup
  * - STICKY/COMMENT: /Text subtype with /Contents and /Name icon
  * - RECTANGLE/ELLIPSE/LINE/ARROW: /Square /Circle /Line with /Rect or /L
+ * - STAMP: /FreeText subtype with centered label text
  */
 export function createNativeAnnotation(
   doc: PDFDocument,
@@ -186,6 +235,22 @@ export function createNativeAnnotation(
           }),
           C: [colorArr[0], colorArr[1], colorArr[2]],
           P: page.node,
+        });
+        break;
+      }
+      case 'stamp': {
+        // Stamp: FreeText annotation with label text
+        const bgColorArr = hexToRgbArray(ann.backgroundColor ?? '#4CAF7D');
+        annotationDict = context.obj({
+          Type: PDFName.of('Annot'),
+          Subtype: PDFName.of('FreeText'),
+          Rect: [rect[0], rect[1], rect[2], rect[3]],
+          Contents: PDFString.of(ann.label ?? ''),
+          C: [bgColorArr[0], bgColorArr[1], bgColorArr[2]],
+          P: page.node,
+          DS: `font-size:${ann.fontSize ?? 12}pt;color:${ann.color ?? '#ffffff'}`,
+          BC: [bgColorArr[0], bgColorArr[1], bgColorArr[2]],
+          IC: [bgColorArr[0], bgColorArr[1], bgColorArr[2]],
         });
         break;
       }

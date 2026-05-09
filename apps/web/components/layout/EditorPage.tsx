@@ -11,7 +11,7 @@ import { useFileHandler } from '@/hooks/useFileHandler';
 import { useAutosave } from '@/hooks/useAutosave';
 import { AutosaveConflictBanner } from '@/components/ui/AutosaveConflictBanner';
 import { PdfParser } from '@/hooks/usePdfParser';
-import type { SerializableTextObject } from '@/stores/documentStore';
+import type { SerializableTextObject, SelectedObject } from '@/stores/documentStore';
 import { EmptyState } from '@/components/layout/EmptyState';
 import { TopBar } from '@/components/layout/TopBar';
 import { LeftSidebar } from '@/components/layout/LeftSidebar';
@@ -150,6 +150,14 @@ export function EditorPage() {
           }
         });
         setTextObjects(allObjects);
+
+        // Clear any selected objects whose IDs no longer exist in textObjects (#8)
+        const validIds = new Set(allObjects.map(o => o.id));
+        const state = useDocumentStore.getState();
+        const stale = state.selectedObjects.filter((o: SelectedObject) => o.type === 'text' && !validIds.has(o.id));
+        if (stale.length > 0) {
+          useDocumentStore.getState().clearSelection();
+        }
       });
     }).catch((err: unknown) => {
       setPdfError(err instanceof Error ? err.message : 'Failed to load PDF');

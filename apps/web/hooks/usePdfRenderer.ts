@@ -20,6 +20,7 @@ interface UsePdfRendererReturn extends PdfRendererState {
   ) => Promise<void>;
   cancelRender: (pageIndex: number) => void;
   destroy: () => void;
+  cleanupCanvas: (canvas: HTMLCanvasElement) => void;
 }
 
 export function usePdfRenderer(): UsePdfRendererReturn {
@@ -98,5 +99,17 @@ export function usePdfRenderer(): UsePdfRendererReturn {
     setState({ pdfDoc: null, pageCount: 0, isLoading: false, error: null });
   }, []);
 
-  return { ...state, loadDocument, renderPage, cancelRender, destroy };
+  // Cleanup canvas 2D context on destroy (#22)
+  const cleanupCanvas = useCallback((canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      (canvas as HTMLCanvasElement & { _context?: CanvasRenderingContext2D | null })._context = null;
+    }
+    canvas.width = 0;
+    canvas.height = 0;
+  }, []);
+
+  return { ...state, loadDocument, renderPage, cancelRender, destroy, cleanupCanvas };
 }

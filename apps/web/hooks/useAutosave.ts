@@ -20,6 +20,8 @@ interface SavedDocument {
   data: ArrayBuffer;
   savedAt: number;
   lastModified: number; // Timestamp of last modification by any tab
+  /** Edit sequence number — incremented on each document edit. Prevents stale saves. (#27) */
+  editSequence: number;
 }
 
 interface BroadcastMessage {
@@ -149,6 +151,17 @@ export async function clearOldDocuments(keepCount = 5): Promise<void> {
 export function useAutosave() {
   const { pdfDocument, fileName, isDirty, setDirty, setSaveStatus, setLastSavedAt } = useDocumentStore();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editSequenceRef = useRef(0);
+
+  // Prune old IndexedDB entries on init (#19)
+  clearOldDocuments(5).catch(() => {});
+
+  // When document becomes dirty, increment edit sequence (#27)
+  const prevIsDirty = useRef(false);
+  if (isDirty && !prevIsDirty.current) {
+    editSequenceRef.current += 1;
+  }
+  prevIsDirty.current = isDirty;
 
   // Beforeunload guard
   useEffect(() => {
@@ -178,11 +191,20 @@ export function useAutosave() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
 
     saveTimer.current = setTimeout(async () => {
+      // Capture sequence at save start — skip if a newer edit has already been saved by another cycle (#27)
+      const thisSequence = editSequenceRef.current;
+      const db = await getDb();
+      const existing = await db.get(STORE_NAME, "current") as SavedDocument | undefined;
+      if (existing && existing.editSequence > thisSequence) {
+        // A newer save has already happened; skip this one
+        setSaveStatus('saved');
+        return;
+      }
+
       try {
         setSaveStatus('saving');
         const libDoc = pdfDocument.getLibDoc();
         const pdfBytes = await libDoc.save();
-        const db = await getDb();
         const now = Date.now();
 
         await db.put(STORE_NAME, {
@@ -191,6 +213,7 @@ export function useAutosave() {
           data: pdfBytes.buffer,
           savedAt: now,
           lastModified: now,
+          editSequence: thisSequence,
         } as SavedDocument);
 
         setDirty(false);

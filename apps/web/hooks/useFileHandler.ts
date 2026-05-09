@@ -55,6 +55,9 @@ export function useFileHandler() {
 
       const engine = getEngine();
       const doc = await engine.load(buffer);
+      if (!doc || doc.getPageCount() === 0) {
+        throw new Error('PDF appears to be corrupted or empty.');
+      }
       setDocument(doc, file.name, file.size, docId);
       setZoom(1.0);
 

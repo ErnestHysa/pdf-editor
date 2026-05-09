@@ -155,6 +155,7 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
                 aspectRatio: `${thumbWidth} / ${(thumbWidth * height) / width}`,
               }
         }
+        data-page-index={pageIndex}
         onClick={onSelect}
         onContextMenu={isDragOverlay ? undefined : handleContextMenu}
       >
@@ -302,6 +303,30 @@ export function SortableThumbnails({
           ref={scrollRef}
           className="flex flex-col gap-1 px-2 overflow-y-auto"
           style={{ height: "100%" }}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            const total = pageCount;
+            if (total === 0) return;
+            let next = virtualizer.getVirtualItems()[0]?.index ?? 0;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              next = Math.min(total - 1, (pageIds.indexOf(activeId ?? `page-${activePageIndex}`) + 1) % total);
+              const nextPage = document.querySelector(`[data-page-index="${next}"]`) as HTMLElement;
+              nextPage?.focus();
+              if (!nextPage) setActivePage(next);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              const curIdx = pageIds.indexOf(activeId ?? `page-${activePageIndex}`);
+              next = (curIdx - 1 + total) % total;
+              const nextPage = document.querySelector(`[data-page-index="${next}"]`) as HTMLElement;
+              nextPage?.focus();
+              if (!nextPage) setActivePage(next);
+            } else if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              const curIdx = pageIds.indexOf(activeId ?? `page-${activePageIndex}`);
+              setActivePage(curIdx === -1 ? activePageIndex : curIdx);
+            }
+          }}
         >
           {/* Total scroll size spacer */}
           <div

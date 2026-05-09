@@ -26,25 +26,67 @@ export function CommandPalette({ open = false, onClose }: { open?: boolean; onCl
   const { setZoom } = useUIStore();
 
   const commands: Command[] = [
-    // Tool switching
+    // ── Tools ──────────────────────────────────────────────────────
     { id: 'tool-select', label: 'Select Tool', shortcut: 'V', category: 'Tools', action: () => setTool('select') },
     { id: 'tool-text', label: 'Text Tool', shortcut: 'T', category: 'Tools', action: () => setTool('text') },
     { id: 'tool-rectangle', label: 'Rectangle Tool', shortcut: 'R', category: 'Tools', action: () => setTool('rectangle') },
     { id: 'tool-ellipse', label: 'Ellipse Tool', shortcut: 'E', category: 'Tools', action: () => setTool('ellipse') },
+    { id: 'tool-line', label: 'Line Tool', shortcut: 'L', category: 'Tools', action: () => setTool('line') },
+    { id: 'tool-arrow', label: 'Arrow Tool', shortcut: 'A', category: 'Tools', action: () => setTool('arrow') },
     { id: 'tool-highlight', label: 'Highlight Tool', shortcut: 'H', category: 'Tools', action: () => setTool('highlight') },
+    { id: 'tool-underline', label: 'Underline Tool', shortcut: 'U', category: 'Tools', action: () => setTool('underline') },
+    { id: 'tool-strikethrough', label: 'Strikethrough Tool', shortcut: 'S', category: 'Tools', action: () => setTool('strikethrough') },
     { id: 'tool-sticky', label: 'Sticky Note Tool', shortcut: 'N', category: 'Tools', action: () => setTool('sticky') },
     { id: 'tool-comment', label: 'Comment Tool', shortcut: 'C', category: 'Tools', action: () => setTool('comment') },
     { id: 'tool-draw', label: 'Draw Tool', shortcut: 'D', category: 'Tools', action: () => setTool('draw') },
     { id: 'tool-image', label: 'Image Tool', shortcut: 'I', category: 'Tools', action: () => setTool('image') },
-    // Zoom
+    { id: 'tool-signature', label: 'Signature Tool', shortcut: 'G', category: 'Tools', action: () => setTool('signature') },
+    // ── Zoom ────────────────────────────────────────────────────────
     { id: 'zoom-in', label: 'Zoom In', shortcut: '=', category: 'View', action: () => setZoom(Math.min(5, (useUIStore.getState().zoom ?? 1) * 1.25)) },
     { id: 'zoom-out', label: 'Zoom Out', shortcut: '-', category: 'View', action: () => setZoom(Math.max(0.25, (useUIStore.getState().zoom ?? 1) / 1.25)) },
-    { id: 'zoom-fit', label: 'Fit to Width', category: 'View', action: () => setZoom(1) },
-    // Actions
-    { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', category: 'Actions', action: () => undo() },
-    { id: 'redo', label: 'Redo', shortcut: 'Ctrl+Shift+Z', category: 'Actions', action: () => redo() },
+    { id: 'zoom-fit', label: 'Zoom to Fit', shortcut: '0', category: 'View', action: () => setZoom(1) },
+    { id: 'zoom-100', label: 'Zoom to 100%', shortcut: '1', category: 'View', action: () => setZoom(1) },
+    // ── Actions ─────────────────────────────────────────────────────
+    { id: 'undo', label: 'Undo', shortcut: '⌘Z', category: 'Actions', action: () => undo() },
+    { id: 'redo', label: 'Redo', shortcut: '⌘⇧Z', category: 'Actions', action: () => redo() },
     { id: 'clear-selection', label: 'Clear Selection', shortcut: 'Esc', category: 'Actions', action: () => clearSelection() },
-    { id: 'download', label: 'Download PDF', category: 'File', action: () => pdfDocument && downloadPdfWithChanges() },
+    // ── Page actions ─────────────────────────────────────────────────
+    { id: 'delete-page', label: 'Delete Page', category: 'Page', action: () => {
+      const { activePageIndex, deletePage, pdfDocument } = useDocumentStore.getState();
+      const pageCount = pdfDocument?.getPageCount() ?? 0;
+      if (pageCount > 1 && window.confirm(`Delete page ${activePageIndex + 1}?`)) {
+        deletePage(activePageIndex);
+      }
+    }},
+    { id: 'rotate-page-left', label: 'Rotate Page Left', category: 'Page', action: () => {
+      const { activePageIndex, rotatePage } = useDocumentStore.getState();
+      rotatePage(activePageIndex, 'left');
+    }},
+    { id: 'rotate-page-right', label: 'Rotate Page Right', category: 'Page', action: () => {
+      const { activePageIndex, rotatePage } = useDocumentStore.getState();
+      rotatePage(activePageIndex, 'right');
+    }},
+    { id: 'crop-page', label: 'Crop Page', category: 'Page', action: () => {
+      const { activePageIndex, cropPage } = useDocumentStore.getState();
+      cropPage(activePageIndex);
+    }},
+    // ── Search ───────────────────────────────────────────────────────
+    { id: 'search', label: 'Search', shortcut: '⌘F', category: 'Search', action: () => {
+      const { setSearchOpen } = useUIStore.getState();
+      setSearchOpen?.(true);
+    }},
+    // ── File ────────────────────────────────────────────────────────
+    { id: 'download', label: 'Export / Download PDF', shortcut: '⌘S', category: 'File', action: () => pdfDocument && downloadPdfWithChanges() },
+    { id: 'export', label: 'Export PDF', category: 'File', action: () => pdfDocument && downloadPdfWithChanges() },
+    // ── Theme / UI ─────────────────────────────────────────────────
+    { id: 'toggle-theme', label: 'Toggle Theme', category: 'UI', action: () => {
+      const { theme, setTheme } = useUIStore.getState();
+      setTheme(theme === 'light' ? 'dark' : 'light');
+    }},
+    { id: 'toggle-left-sidebar', label: 'Toggle Left Sidebar', shortcut: '⌘B', category: 'UI', action: () => {
+      const { toggleLeftSidebar } = useUIStore.getState();
+      toggleLeftSidebar();
+    }},
   ];
 
   const filtered = query
