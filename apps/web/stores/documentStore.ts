@@ -138,6 +138,8 @@ export interface DocumentState {
   imageObjects: SerializableImageObject[];      // image objects added by user
   fileName: string;
   fileSize: number;
+  /** SHA-256 content hash — stable document identity for IndexedDB keys */
+  docId?: string;
   isDirty: boolean;
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved' | 'offline';
@@ -152,7 +154,7 @@ export interface DocumentState {
   annotations: AnnotationObject[]; // R35-R42 annotation objects
 
   // Actions
-  setDocument: (doc: PdfDocument | null, fileName?: string, fileSize?: number) => void;
+  setDocument: (doc: PdfDocument | null, fileName?: string, fileSize?: number, docId?: string) => void;
   setPdfJsDoc: (doc: PdfJsDocumentProxy | null) => void;
   setLoading: (loading: boolean) => void;
   setDirty: (dirty: boolean) => void;
@@ -218,8 +220,9 @@ export interface DocumentState {
 const initialState = {
   pdfDocument: null,
   pdfJsDoc: null,
-  fileName: 'Untitled.pdf',
+  fileName: "Untitled.pdf",
   fileSize: 0,
+  docId: undefined,
   isDirty: false,
   isLoading: false,
   saveStatus: 'idle' as const,
@@ -242,11 +245,12 @@ const initialState = {
 export const useDocumentStore = create<DocumentState>()(
   immer((set) => ({
     ...initialState,
-    setDocument: (doc, fileName = "Untitled.pdf", fileSize = 0) =>
+    setDocument: (doc, fileName = "Untitled.pdf", fileSize = 0, docId) =>
       set((state) => {
         state.pdfDocument = doc;
         state.fileName = fileName;
         state.fileSize = fileSize;
+        state.docId = docId;
         state.isDirty = false;
         state.saveStatus = 'idle';
         state.lastSavedAt = null;

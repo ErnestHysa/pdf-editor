@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, FileText, FileArchive, Image, Loader2 } from "lucide-react";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -48,6 +48,32 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [quality, setQuality] = useState(85);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, onClose]);
+
+  // Focus trap
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      previousFocusRef.current = document.activeElement as HTMLElement;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      focusable?.[0]?.focus();
+    } else {
+      previousFocusRef.current?.focus();
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -104,7 +130,13 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative bg-bg-elevated border border-border rounded-xl shadow-2xl w-[440px] animate-scale-in">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Export"
+        className="relative bg-bg-elevated border border-border rounded-xl shadow-2xl w-[440px] animate-scale-in"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text-primary">Export</h2>

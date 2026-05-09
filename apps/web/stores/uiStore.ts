@@ -17,6 +17,7 @@ interface UIState {
   insertPageDialogMode: "blank" | "file";
   mobileBottomSheetOpen: boolean;
   mobileBottomSheetMode: 'pages' | 'properties' | 'tool-options';
+  toast: string | null;
 
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
@@ -31,6 +32,7 @@ interface UIState {
   setExportDialogOpen: (open: boolean) => void;
   setInsertPageDialog: (open: boolean, mode?: UIState['insertPageDialogMode']) => void;
   setMobileBottomSheet: (open: boolean, mode?: UIState['mobileBottomSheetMode']) => void;
+  setToast: (msg: string | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -47,6 +49,7 @@ export const useUIStore = create<UIState>()(
     insertPageDialogMode: 'blank',
     mobileBottomSheetOpen: false,
     mobileBottomSheetMode: 'pages',
+    toast: null,
 
     setTheme: (theme) =>
       set((state) => {
@@ -120,6 +123,11 @@ export const useUIStore = create<UIState>()(
       set((state) => {
         state.mobileBottomSheetOpen = open;
         if (mode) state.mobileBottomSheetMode = mode;
+      }),
+
+    setToast: (msg) =>
+      set((state) => {
+        state.toast = msg;
       }),
   }))
 );

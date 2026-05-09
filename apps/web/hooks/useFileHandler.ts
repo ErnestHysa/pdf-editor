@@ -9,6 +9,20 @@ import { loadHistory, loadOverlayState } from '@/hooks/useAutosave';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
+/** Validate PDF magic bytes: %PDF- version header at start of file */
+function isValidPdfBuffer(buffer: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 4) return false;
+  return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+}
+
+/** Compute SHA-256 hash of a buffer for stable document identification */
+async function computeHash(buffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export function useFileHandler() {
   const engineRef = useRef<PdfEngine | null>(null);
   const { setDocument, setLoading } = useDocumentStore();
@@ -30,13 +44,21 @@ export function useFileHandler() {
     setLoading(true);
     try {
       const buffer = await file.arrayBuffer();
+
+      // Security: validate PDF magic bytes before processing
+      if (!isValidPdfBuffer(buffer)) {
+        throw new Error('Invalid PDF file. The file content does not match a valid PDF.');
+      }
+
+      // Compute stable hash for document identity (prevents filename collisions)
+      const docId = await computeHash(buffer);
+
       const engine = getEngine();
       const doc = await engine.load(buffer);
-      setDocument(doc, file.name, file.size);
+      setDocument(doc, file.name, file.size, docId);
       setZoom(1.0);
 
-      // Restore history from IndexedDB if available
-      const docId = file.name ?? "unknown";
+      // Restore history from IndexedDB if available (using stable docId hash)
       const snapshot = await loadHistory(docId);
       if (snapshot) {
         useHistoryStore.getState().hydrateHistory(snapshot);

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { openDB, IDBPDatabase } from "idb";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useHistoryStore } from "@/stores/historyStore";
+import { useUIStore } from "@/stores/uiStore";
 import { exportPdfWithChanges } from "./usePdfExporter";
 import { AUTOSAVE_DELAY_MS } from "@/lib/constants";
 
@@ -70,9 +71,97 @@ function getBroadcastChannel(): BroadcastChannel | null {
   return broadcastChannel;
 }
 
+// ── Beforeunload guard ────────────────────────────────────────────
+
+export function flushSave(): void {
+  const { pdfDocument, fileName, isDirty } = useDocumentStore.getState();
+  if (!pdfDocument || !isDirty) return;
+
+  // Synchronously save to IndexedDB
+  const doSave = async () => {
+    try {
+      const libDoc = pdfDocument.getLibDoc();
+      const pdfBytes = await libDoc.save();
+      const db = await getDb();
+      const now = Date.now();
+
+      // Use explicit transaction to capture quota errors
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+
+      tx.onerror = () => {
+        console.error('[Autosave] IDB error:', tx.error);
+        const msg = (tx.error?.message ?? '').toLowerCase();
+        if (msg.includes('quota') || msg.includes('space') || msg.includes('disk')) {
+          useUIStore.getState().setToast?.('Autosave failed: storage quota exceeded. Try closing other tabs or removing saved files.');
+        }
+      };
+
+      // idb's put returns Promise; we use tx.complete to wait
+      store.put({
+        id: "current",
+        name: fileName,
+        data: pdfBytes.buffer,
+        savedAt: now,
+        lastModified: now,
+      } as SavedDocument);
+
+      tx.oncomplete = () => {
+        useDocumentStore.getState().setDirty(false);
+        useDocumentStore.getState().setSaveStatus('saved');
+        useDocumentStore.getState().setLastSavedAt(now);
+        console.log("[Autosave] flushSave completed");
+      };
+    } catch (err) {
+      console.error("[Autosave] flushSave failed:", err);
+      const msg = (err as Error).message?.toLowerCase() ?? '';
+      if (msg.includes('quota') || msg.includes('space') || msg.includes('disk')) {
+        useUIStore.getState().setToast?.('Autosave failed: storage quota exceeded. Try closing other tabs or removing saved files.');
+      }
+    }
+  };
+
+  doSave();
+}
+
+// ── Clear old autosave entries ──────────────────────────────────
+
+export async function clearOldDocuments(keepCount = 5): Promise<void> {
+  try {
+    const db = await getDb();
+    const all = await db.getAll(STORE_NAME);
+    if (all.length <= keepCount) return;
+
+    const sorted = [...all].sort((a, b) => (b.lastModified ?? 0) - (a.lastModified ?? 0));
+    const toDelete = sorted.slice(keepCount);
+
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    for (const item of toDelete) {
+      await tx.store.delete(item.id);
+    }
+    await tx.done;
+    console.log('[Autosave] cleared', toDelete.length, 'old document(s)');
+  } catch (err) {
+    console.error('[Autosave] clearOldDocuments failed:', err);
+  }
+}
+
 export function useAutosave() {
   const { pdfDocument, fileName, isDirty, setDirty, setSaveStatus, setLastSavedAt } = useDocumentStore();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Beforeunload guard
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const state = useDocumentStore.getState();
+      if (state.isDirty) {
+        // Attempt flush before page unloads
+        flushSave();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // Broadcast save event to other tabs
   const broadcastSave = useCallback((lastModified: number) => {

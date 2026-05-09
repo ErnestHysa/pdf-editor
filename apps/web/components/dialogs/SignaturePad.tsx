@@ -12,8 +12,6 @@ interface SignaturePadProps {
 type Tab = "draw" | "type" | "upload";
 
 export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
-  if (!open) return null;
-
   const [activeTab, setActiveTab] = useState<Tab>("draw");
   const [typedText, setTypedText] = useState("");
   const [fontSize, setFontSize] = useState(48);
@@ -23,6 +21,33 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, onClose]);
+
+  // Focus trap: restore focus on close
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      previousFocusRef.current = document.activeElement as HTMLElement;
+      // Focus first focusable element in dialog
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      focusable?.[0]?.focus();
+    } else {
+      previousFocusRef.current?.focus();
+    }
+  }, [open]);
 
   // Initialize canvas
   useEffect(() => {
@@ -43,6 +68,8 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
   }, []);
+
+  if (!open) return null;
 
   const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -167,7 +194,13 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative bg-bg-elevated border border-border rounded-xl shadow-2xl w-[480px] animate-scale-in">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add Signature"
+        className="relative bg-bg-elevated border border-border rounded-xl shadow-2xl w-[480px] animate-scale-in"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text-primary">Add Signature</h2>

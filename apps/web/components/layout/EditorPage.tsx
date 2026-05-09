@@ -500,11 +500,45 @@ export function EditorPage() {
         {deviceType !== 'mobile' && <RightPanel open={rightPanelOpen} />}
       </div>
 
+      {/* PDF load error banner */}
+      {pdfError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 bg-red-500 text-white text-sm rounded-lg shadow-lg flex items-center gap-3">
+          <span>{pdfError}</span>
+          <button
+            onClick={() => setPdfError(null)}
+            className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-xs font-medium transition-colors"
+          >
+            Retry
+          </button>
+          <button
+            onClick={() => setPdfError(null)}
+            className="ml-1 hover:opacity-80"
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Global UI overlays */}
       <UndoRedoPill />
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
       {showShortcuts && (
         <KeyboardShortcutsOverlay onClose={() => setShowShortcuts(false)} />
+      )}
+
+      {/* Toast notifications */}
+      {useUIStore((s) => s.toast) && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 bg-red-500 text-white text-sm rounded-lg shadow-lg flex items-center gap-2">
+          <span>{useUIStore((s) => s.toast)}</span>
+          <button
+            onClick={() => useUIStore.getState().setToast(null)}
+            className="ml-2 hover:opacity-80"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
       )}
 
       {deviceType === 'mobile' && (
