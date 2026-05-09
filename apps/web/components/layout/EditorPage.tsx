@@ -359,6 +359,11 @@ export function EditorPage() {
     const centerY = pageHeight / 2;
 
     // Try image first
+    // TODO(#12): Pasting at page center may land off-screen if the page is scrolled out of view.
+    // The coordinates are in page-space (untransformed), but if the user has scrolled the
+    // viewport such that the active page is not visible, the pasted object will appear at
+    // the "center" of a page that isn't on screen. We should also check the visible viewport
+    // bounds and clamp the coordinates to keep the object in view.
     const imageItems = e.clipboardData?.items;
     if (imageItems) {
       for (const item of Array.from(imageItems)) {
@@ -376,8 +381,9 @@ export function EditorPage() {
               addImg({
                 id: `img-${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 pageIndex: api,
-                x: centerX - img.width / 2,
-                y: centerY - img.height / 2,
+                // Clamp so the pasted image stays within page bounds (issue #12)
+                x: Math.max(0, Math.min(centerX - img.width / 2, pageWidth - img.width)),
+                y: Math.max(0, Math.min(centerY - img.height / 2, pageHeight - img.height)),
                 width: img.width,
                 height: img.height,
                 src: dataUrl,

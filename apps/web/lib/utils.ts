@@ -43,5 +43,10 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function generateId(): string {
-  return Math.random().toString(36).slice(2, 11);
+  // Use crypto.randomUUID for better randomness and uniqueness over Math.random()
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
+  return Math.random().toString(36).slice(2, 11) + Math.random().toString(36).slice(2, 11);
 }

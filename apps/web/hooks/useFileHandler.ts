@@ -98,7 +98,13 @@ export function useFileHandler() {
     e.preventDefault();
     e.stopPropagation();
     const file = e.dataTransfer?.files?.[0];
-    if (file) handleFile(file);
+    if (!file) return;
+    // Reject non-PDF files dropped onto the editor (#17)
+    if (!file.type.includes('pdf') && !file.name.endsWith('.pdf')) {
+      useUIStore.getState().setToast?.('Only PDF files are supported.');
+      return;
+    }
+    handleFile(file);
   }, [handleFile]);
 
   const handleDragOver = useCallback((e: DragEvent) => {

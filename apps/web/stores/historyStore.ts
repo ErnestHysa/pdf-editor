@@ -164,6 +164,8 @@ case 'annotation-update':
         break;
       case 'page-rotate':
         if (data.pageIndex !== undefined && data.rotation !== undefined) {
+          // Undo: reverse the rotation. A +90 (right) rotation undoes to 'left',
+          // a -90 (left) rotation undoes to 'right'.
           store.rotatePage(data.pageIndex, data.rotation === 90 ? 'left' : 'right');
         }
         break;
@@ -242,6 +244,10 @@ function buildExecuteRedo(data: HistoryActionData): () => void {
         });
         break;
       case 'page-add':
+        // NOTE: This assumes the page was inserted immediately after the original page index.
+        // If the document structure has changed (e.g., pages reordered or deleted), the
+        // pageIndex may no longer be valid. Consider validating pageIndex < doc.getPageCount()
+        // before calling addPage. (#14)
         store.addPage(data.pageIndex ?? -1);
         break;
       case 'page-delete':
@@ -250,6 +256,10 @@ function buildExecuteRedo(data: HistoryActionData): () => void {
         }
         break;
       case 'page-duplicate':
+        // NOTE: This assumes the duplicate was inserted immediately after the original page.
+        // If pages have been reordered or deleted since this action was recorded, the
+        // pageIndex may be stale. Consider validating that pageIndex+1 < doc.getPageCount()
+        // before calling duplicatePage. (#14)
         if (data.pageIndex !== undefined) {
           store.duplicatePage(data.pageIndex);
         }
@@ -261,7 +271,9 @@ function buildExecuteRedo(data: HistoryActionData): () => void {
         break;
       case 'page-rotate':
         if (data.pageIndex !== undefined && data.rotation !== undefined) {
-          store.rotatePage(data.pageIndex, data.rotation === -90 ? 'left' : 'right');
+          // Redo: re-apply the rotation. A +90 (right) rotation redoes to 'right',
+          // a -90 (left) rotation redoes to 'left'. Fixes issue #13.
+          store.rotatePage(data.pageIndex, data.rotation === 90 ? 'right' : 'left');
         }
         break;
       case 'page-crop':

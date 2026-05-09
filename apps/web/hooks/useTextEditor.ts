@@ -55,7 +55,10 @@ export function useTextEditor() {
         const obj = page?.getObjects().texts.find((t: any) => t.getId() === objectId);
         if (obj) {
           obj.setContent(newContent);
-          glyphPreservingEdit(pageIndex, obj.getObjectRef(), originalContent, newContent);
+          const success = glyphPreservingEdit(pageIndex, obj.getObjectRef(), originalContent, newContent);
+          if (!success) return false; // Only set dirty if glyphPreservingEdit succeeded
+        } else {
+          return false; // No object found to update
         }
       }
     }

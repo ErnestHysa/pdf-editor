@@ -80,12 +80,17 @@ function getBroadcastChannel(): BroadcastChannel | null {
 
 // ── Beforeunload guard ────────────────────────────────────────────
 
+// Mutex to prevent double-save race between beforeunload flushSave and autosave setTimeout
+const saveInFlightRef = { current: false };
+
 export function flushSave(): void {
+  if (saveInFlightRef.current) return;
   const { pdfDocument, fileName, isDirty } = useDocumentStore.getState();
   if (!pdfDocument || !isDirty) return;
 
   // Synchronously save to IndexedDB
   const doSave = async () => {
+    saveInFlightRef.current = true;
     try {
       // Use exportPdfWithChanges so the blob includes Zustand text objects (R20)
       const pdfBytes = await exportPdfWithChanges();
@@ -118,6 +123,7 @@ export function flushSave(): void {
         useDocumentStore.getState().setSaveStatus('saved');
         useDocumentStore.getState().setLastSavedAt(now);
         console.log("[Autosave] flushSave completed");
+        saveInFlightRef.current = false;
 
         // Also persist overlay state (textObjects, annotations, etc.) alongside the blob
         const docId = fileName ?? "unknown";
@@ -125,6 +131,7 @@ export function flushSave(): void {
       };
     } catch (err) {
       console.error("[Autosave] flushSave failed:", err);
+      saveInFlightRef.current = false;
       const msg = (err as Error).message?.toLowerCase() ?? '';
       if (msg.includes('quota') || msg.includes('space') || msg.includes('disk')) {
         useUIStore.getState().setToast?.('Autosave failed: storage quota exceeded. Try closing other tabs or removing saved files.');
@@ -207,6 +214,8 @@ export function useAutosave() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
 
     saveTimer.current = setTimeout(async () => {
+      // Skip if a save is already in-flight from beforeunload
+      if (saveInFlightRef.current) return;
       // Capture sequence at save start — skip if a newer edit has already been saved by another cycle (#27)
       const thisSequence = editSequenceRef.current;
       const db = await getDb();
@@ -479,6 +488,15 @@ interface OverlayState {
   annotations: import("@/stores/documentStore").AnnotationObject[];
   formFieldValues: Record<string, string | boolean>;
   pendingSignature: { dataUrl: string; width: number; height: number } | null;
+  searchQuery: string;
+  searchActiveMatches: Array<{
+    textObjectId: string;
+    pageIndex: number;
+    matchStart: number;
+    matchEnd: number;
+    matchText: string;
+  }>;
+  searchCurrentMatchIndex: number;
 }
 
 /** Save the current Zustand overlay state to IndexedDB */
@@ -491,6 +509,9 @@ export async function saveOverlayState(docId: string): Promise<void> {
       annotations: state.annotations,
       formFieldValues: state.formFieldValues,
       pendingSignature: state.pendingSignature,
+      searchQuery: state.searchQuery,
+      searchActiveMatches: state.searchActiveMatches,
+      searchCurrentMatchIndex: state.searchCurrentMatchIndex,
     };
     const db = await getDb();
     await db.put(OVERLAY_STORE_NAME, { docId, ...overlay }, docId);
@@ -512,6 +533,14 @@ export async function loadOverlayState(
     console.error("[Autosave] loadOverlayState failed:", err);
     return null;
   }
+}
+
+/** Apply restored overlay state to the document store (search, etc.) */
+export function applyOverlayState(overlay: OverlayState): void {
+  const store = useDocumentStore.getState();
+  if (overlay.searchQuery !== undefined) store.setSearchQuery(overlay.searchQuery);
+  if (overlay.searchActiveMatches !== undefined) store.setSearchActiveMatches(overlay.searchActiveMatches);
+  if (overlay.searchCurrentMatchIndex !== undefined) store.setSearchCurrentMatchIndex(overlay.searchCurrentMatchIndex);
 }
 
 /** Delete saved overlay state for a document */

@@ -704,7 +704,7 @@ export const PageCanvas = memo(function PageCanvas({
       })}
 
       {/* Image overlays — pdf-engine ImageObject instances */}
-      {pageObjects.images
+      {(pageObjects?.images ?? [])
         .filter((imgObj: any) => {
           const bbox = imgObj.getBBox();
           return isObjectVisible(bbox.x, bbox.y, bbox.width, bbox.height);

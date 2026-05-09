@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { PdfDocument } from '@pagecraft/pdf-engine';
+import { useHistoryStore } from './historyStore';
 
 // ── Annotation types ────────────────────────────────────────────
 
@@ -388,6 +389,15 @@ export const useDocumentStore = create<DocumentState>()(
     duplicatePage: (index) => {
       const doc = useDocumentStore.getState().pdfDocument;
       if (!doc) return;
+
+      // Push to history before duplicating (#19)
+      useHistoryStore.getState().push({
+        label: `Duplicated page ${index + 1}`,
+        targetIds: [],
+        type: 'page-duplicate',
+        pageIndex: index,
+      });
+
       const newPage = doc.duplicatePage(index);
       set((state) => {
         state.isDirty = true;
@@ -447,6 +457,17 @@ export const useDocumentStore = create<DocumentState>()(
       const libDoc = doc.getLibDoc();
       const page = libDoc.getPage(index);
       if (!page) return;
+
+      // Capture previous crop box for undo before modifying (#20)
+      const prevCrop = page.getCropBox?.() ?? null;
+      // Push to history before cropping (#20)
+      useHistoryStore.getState().push({
+        label: `Cropped page ${index + 1}`,
+        targetIds: [],
+        type: 'page-crop',
+        pageIndex: index,
+        objectData: { current: bounds, previous: prevCrop },
+      });
 
       if (bounds) {
         // Convert DOM coords (top-left origin) to PDF coords (bottom-left origin)
