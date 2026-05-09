@@ -233,8 +233,9 @@ export function EditorPage() {
               objectRef: '',
             });
           }
-        }).catch(() => {
-          // Fall back to internal clipboard store
+        }).catch((err) => {
+          // Issue #34: clipboard permission denied — show toast and fall back to internal clipboard
+          useUIStore.getState().setToast('Clipboard access denied. Try pasting from the edit menu instead.');
           useDocumentStore.getState().pasteClipboard();
         });
         return;

@@ -391,16 +391,19 @@ export function useAutosaveConflict() {
     return () => channel.removeEventListener("message", handleMessage);
   }, [hasConflict]);
 
-  /** Reload: accept the external changes */
+  /** Reload: accept the external changes — reload from the autosaved document in IndexedDB */
   const resolveReload = useCallback(() => {
     setHasConflict(false);
     setConflictData(null);
+    // Trigger a full force-reload to re-parse the PDF and restore overlay state
+    useDocumentStore.getState().forceReload();
   }, []);
 
-  /** Keep: discard external changes, keep current state */
+  /** Keep: discard external changes, keep current state — clear the conflict banner */
   const resolveKeep = useCallback(() => {
     setHasConflict(false);
     setConflictData(null);
+    // The next autosave will overwrite the external change with our current state
   }, []);
 
   return {

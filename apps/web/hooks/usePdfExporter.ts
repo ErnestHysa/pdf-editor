@@ -114,7 +114,8 @@ export async function exportPdfWithChanges(): Promise<Uint8Array> {
       // Skip if this is an unmodified original (has a real PDF object ref)
       if (textObj.objectRef && textObj.objectRef !== "new") continue;
 
-      // Parse font
+      // Parse font — use Helvetica for all exports since custom font files are not available
+      // TODO #36: Load actual .ttf/.otf font files to enable font-family embedding
       let font;
       try {
         font = await libDoc.embedFont(StandardFonts.Helvetica);
@@ -292,8 +293,11 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
           });
           break;
         }
-        case 'arrow': {
-          const strokeW = (ann as { strokeWidth?: number }).strokeWidth ?? 1;
+case 'arrow': {
+          const strokeW = ann.strokeWidth ?? 1;
+          // Scale arrowhead with the diagonal size of the arrow bounding box
+          const diag = Math.sqrt(ann.width * ann.width + ann.height * ann.height);
+          const arrowSize = Math.max(6, Math.min(diag * 0.15, 24));
           page.drawLine({
             start: { x: ann.x, y: pdfY + ann.height },
             end: { x: ann.x + ann.width, y: pdfY },
@@ -301,18 +305,21 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
             color,
             opacity,
           });
-          // Draw arrowhead as two lines (simplified triangle)
+          // Arrowhead: two lines forming a triangle, sized proportionally
+          const ax = ann.x + ann.width;
+          const ay = pdfY;
+          const backX = ax - arrowSize;
           page.drawLine({
-            start: { x: ann.x + ann.width, y: pdfY },
-            end: { x: ann.x + ann.width - 8, y: pdfY + 4 },
-            thickness: ann.strokeWidth ?? 1,
+            start: { x: ax, y: ay },
+            end: { x: backX, y: ay + arrowSize * 0.5 },
+            thickness: strokeW,
             color,
             opacity,
           });
           page.drawLine({
-            start: { x: ann.x + ann.width, y: pdfY },
-            end: { x: ann.x + ann.width - 8, y: pdfY - 4 },
-            thickness: ann.strokeWidth ?? 1,
+            start: { x: ax, y: ay },
+            end: { x: backX, y: ay - arrowSize * 0.5 },
+            thickness: strokeW,
             color,
             opacity,
           });
@@ -331,6 +338,15 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
         }
         case 'sticky': {
           const content = (ann as { content?: string }).content ?? '';
+          // Dynamic font size based on content length and annotation height
+          const minDim = Math.min(ann.width, ann.height);
+          const baseFontSize = Math.max(7, Math.min(minDim * 0.35, 16));
+          const lineHeight = baseFontSize * 1.3;
+          const maxLines = Math.floor((ann.height - 8) / lineHeight);
+          const maxCharsPerLine = Math.max(1, Math.floor((ann.width - 8) / (baseFontSize * 0.55)));
+          const truncated = content.length > maxLines * maxCharsPerLine
+            ? content.slice(0, maxLines * maxCharsPerLine - 3) + '…'
+            : content;
           // Draw sticky note background
           page.drawRectangle({
             x: ann.x,
@@ -340,14 +356,14 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
             color,
             opacity: 0.9,
           });
-          // Draw text content
+          // Draw text content with dynamic sizing
           let font;
           try { font = await libDoc.embedFont(StandardFonts.Helvetica); }
           catch { font = await libDoc.embedFont(StandardFonts.Helvetica); }
-          page.drawText(content, {
+          page.drawText(truncated, {
             x: ann.x + 4,
-            y: pdfY + ann.height - 12,
-            size: 10,
+            y: pdfY + ann.height - lineHeight - 2,
+            size: baseFontSize,
             font,
             color: rgb(0, 0, 0),
             opacity,
@@ -358,24 +374,35 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
         case 'comment': {
           const content = (ann as { content?: string }).content ?? '';
           const author = (ann as { author?: string }).author ?? 'Anonymous';
-          // Draw comment bubble
+          // Use annotation color for background (not hardcoded yellow)
+          const bgColor = parseHexColor(ann.color);
+          // Dynamic font size based on content length and annotation dimensions
+          const minDim = Math.min(ann.width, ann.height);
+          const commentFontSize = Math.max(7, Math.min(minDim * 0.3, 12));
+          const lineHeight = commentFontSize * 1.25;
+          const maxLines = Math.floor((ann.height - 12) / lineHeight);
+          const maxCharsPerLine = Math.max(1, Math.floor((ann.width - 8) / (commentFontSize * 0.55)));
+          const truncated = content.length > maxLines * maxCharsPerLine
+            ? content.slice(0, maxLines * maxCharsPerLine - 3) + '…'
+            : content;
+          // Draw comment bubble with annotation color border and light fill
           page.drawRectangle({
             x: ann.x,
             y: pdfY,
             width: ann.width,
             height: ann.height,
-            borderColor: color,
+            borderColor: bgColor,
             borderWidth: 1,
-            color: rgb(1, 1, 0.9),
+            color: rgb(1, 1, 0.95),
             opacity,
           });
           let font;
           try { font = await libDoc.embedFont(StandardFonts.Helvetica); }
           catch { font = await libDoc.embedFont(StandardFonts.Helvetica); }
-          page.drawText(`${author}: ${content}`, {
+          page.drawText(`${author}: ${truncated}`, {
             x: ann.x + 4,
-            y: pdfY + ann.height - 12,
-            size: 9,
+            y: pdfY + ann.height - lineHeight - 4,
+            size: commentFontSize,
             font,
             color: rgb(0, 0, 0),
             opacity,

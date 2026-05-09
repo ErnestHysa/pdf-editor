@@ -35,10 +35,13 @@ function rectsIntersect(
   );
 }
 
-// ── PageCanvas ────────────────────────────────────────────────────
-// Full canvas rendering for a single PDF page: pdf.js canvas,
-// text/image/annotation overlays, drawing tools, selection handles.
-// memoized so it only re-renders when its page or selection changes.
+// ── Coordinate system note ──────────────────────────────────────
+// All coordinates in this component are in PAGE SPACE (top-left origin):
+//   - PDF page coordinates: x rightward, y downward (DOM convention)
+//   - pdf-lib uses bottom-left origin; conversions happen at export time
+//   - Pan/zoom transforms applied at the EditorPage level; PageCanvas operates
+//     in untransformed page coordinates
+//   - SelectionHandles use page-space coords directly (rotation applied via SVG transforms)
 export const PageCanvas = memo(function PageCanvas({
   page,
   pageIndex,
@@ -76,6 +79,8 @@ export const PageCanvas = memo(function PageCanvas({
   const [isDrawingStroke, setIsDrawingStroke] = useState(false);
   const [shapePreview, setShapePreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [shapeStartPos, setShapeStartPos] = useState<{ x: number; y: number } | null>(null);
+  // Issue #29: lock the shape tool type at drag start to prevent mid-drag tool changes
+  const shapeToolRef = useRef<string | null>(null);
   const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [commentInput, setCommentInput] = useState('');
@@ -235,16 +240,51 @@ export const PageCanvas = memo(function PageCanvas({
     const pos = getPointerPosition(e);
     setShapeStartPos(pos);
 
-    // Start long-press timer for sticky/comment tools
+    // Issue #32: long-press timer for sticky/comment — only creates the object
+    // when the timer fires (without pointer up first). Does NOT create object
+    // on initial pointer down.
     if (activeTool === 'sticky' || activeTool === 'comment') {
       touchStartRef.current = pos;
       longPressTimerRef.current = setTimeout(() => {
-        // Long-press without movement: show context menu instead of creating annotation
-        if (onLongPress) {
-          onLongPress(pos.x, pos.y);
-        }
         touchStartRef.current = null;
+        const id = `${activeTool}-${pageIndex}-${Date.now()}`;
+        if (activeTool === 'sticky') {
+          const newSticky: any = {
+            id, type: 'sticky', pageIndex,
+            x: pos.x - 60, y: pos.y - 30, width: 120, height: 80,
+            color: toolOptions.color, opacity: 1,
+            content: '',
+          };
+          useHistoryStore.getState().push({
+            label: 'Add sticky note',
+            targetIds: [id],
+            type: 'annotation-add',
+            objectData: newSticky,
+          });
+          addAnnotation(newSticky);
+          setDirty(true);
+          // Show context menu at the sticky location
+          if (onLongPress) onLongPress(pos.x, pos.y);
+        } else {
+          const newComment: any = {
+            id, type: 'comment', pageIndex,
+            x: pos.x - 12, y: pos.y - 12, width: 24, height: 24,
+            color: toolOptions.color, opacity: 1,
+            content: '', author: 'You', timestamp: Date.now(),
+          };
+          useHistoryStore.getState().push({
+            label: 'Add comment',
+            targetIds: [id],
+            type: 'annotation-add',
+            objectData: newComment,
+          });
+          addAnnotation(newComment);
+          setDirty(true);
+          // Show context menu at the comment location
+          if (onLongPress) onLongPress(pos.x, pos.y);
+        }
       }, LONG_PRESS_DURATION);
+      return;
     }
 
     if (activeTool === 'draw') {
@@ -254,44 +294,6 @@ export const PageCanvas = memo(function PageCanvas({
       drawingPointsRef.current = [pos];
       ctx.beginPath();
       ctx.moveTo(pos.x * renderScale, pos.y * renderScale);
-      return;
-    }
-
-    if (activeTool === 'sticky') {
-      const id = `sticky-${pageIndex}-${Date.now()}`;
-      const newSticky: any = {
-        id, type: 'sticky', pageIndex,
-        x: pos.x - 60, y: pos.y - 30, width: 120, height: 80,
-        color: toolOptions.color, opacity: 1,
-        content: '',
-      };
-      useHistoryStore.getState().push({
-        label: 'Add sticky note',
-        targetIds: [id],
-        type: 'annotation-add',
-        objectData: newSticky,
-      });
-      addAnnotation(newSticky);
-      setDirty(true);
-      return;
-    }
-
-    if (activeTool === 'comment') {
-      const id = `comment-${pageIndex}-${Date.now()}`;
-      const newComment: any = {
-        id, type: 'comment', pageIndex,
-        x: pos.x - 12, y: pos.y - 12, width: 24, height: 24,
-        color: toolOptions.color, opacity: 1,
-        content: '', author: 'You', timestamp: Date.now(),
-      };
-      useHistoryStore.getState().push({
-        label: 'Add comment',
-        targetIds: [id],
-        type: 'annotation-add',
-        objectData: newComment,
-      });
-      addAnnotation(newComment);
-      setDirty(true);
       return;
     }
 
@@ -403,6 +405,8 @@ export const PageCanvas = memo(function PageCanvas({
 
     if (['rectangle', 'ellipse', 'line', 'arrow'].includes(activeTool)) {
       setShapePreview({ x: pos.x, y: pos.y, width: 0, height: 0 });
+      // Issue #29: lock tool type during drag
+      shapeToolRef.current = activeTool;
     }
   }, [activeTool, pageIndex, toolOptions, renderScale, getPointerPosition, isGesturing, onLongPress]);
 
@@ -446,6 +450,8 @@ export const PageCanvas = memo(function PageCanvas({
       longPressTimerRef.current = null;
     }
     touchStartRef.current = null;
+    // Issue #29: clear locked shape tool on pointer up (in case drag never created a shape)
+    if (!shapePreview) shapeToolRef.current = null;
 
     const pos = getPointerPosition(e);
 
@@ -495,6 +501,8 @@ export const PageCanvas = memo(function PageCanvas({
       addAnnotation(newAnn);
       setShapePreview(null);
       setShapeStartPos(null);
+      // Issue #29: clear locked tool ref after drag ends
+      shapeToolRef.current = null;
       setDirty(true);
     }
   }, [activeTool, pageIndex, toolOptions, shapePreview, isDrawingStroke, renderScale, getPointerPosition]);
@@ -563,7 +571,7 @@ export const PageCanvas = memo(function PageCanvas({
       {/* Shape preview while drawing */}
       {shapePreview && (
         <ShapePreview
-          type={activeTool as any}
+          type={shapeToolRef.current as any}
           preview={shapePreview}
           color={toolOptions.color}
           strokeWidth={toolOptions.strokeWidth ?? 2}
@@ -606,12 +614,12 @@ export const PageCanvas = memo(function PageCanvas({
                   else if (handle === 's') { nh += dy; }
                   else if (handle === 'e') { nw += dx; }
                   else if (handle === 'w') { nx += dx; nw -= dx; }
-                  if (nw > 10 && nh > 10) {
+                  // Issue #33: guard against negative or too-small dimensions during resize
+                  if (nw >= 10 && nh >= 10) {
                     useDocumentStore.getState().updateTextObject(textObj.id, { x: nx, y: ny, width: nw, height: nh });
                     setDirty(true);
                   }
                 }}
-                onRotateStart={() => {}}
                 onRotateMove={(deg) => {
                   useDocumentStore.getState().updateTextObject(textObj.id, { rotation: deg });
                   setDirty(true);
@@ -740,12 +748,11 @@ export const PageCanvas = memo(function PageCanvas({
                   else if (handle === 's') { nh += dy; }
                   else if (handle === 'e') { nw += dx; }
                   else if (handle === 'w') { nx += dx; nw -= dx; }
-                  if (nw > 10 && nh > 10) {
+                  if (nw >= 10 && nh >= 10) {
                     imgObj.setBBox({ x: nx, y: ny, width: nw, height: nh });
                     setDirty(true);
                   }
                 }}
-                onRotateStart={() => {}}
                 onRotateMove={(deg) => { imgObj.setRotation(deg); setDirty(true); }}
               />
             )}
@@ -754,10 +761,12 @@ export const PageCanvas = memo(function PageCanvas({
         );
       })}
 
-      {/* Zustand ImageObject overlays — user-added images */}
+{/* Zustand ImageObject overlays — user-added images */}
+      {/* Note: imageObjects is already filtered by pageIndex at subscription time (line ~58-59).
+          Do NOT filter again here — that would be a double filter. Viewport culling via isObjectVisible still applies. */}
       {imageObjects
-        .filter((img: { pageIndex: number; x: number; y: number; width: number; height: number }) => img.pageIndex === pageIndex && isObjectVisible(img.x, img.y, img.width, img.height))
-        .map((imgObj: { id: string; x: number; y: number; width: number; height: number; rotation?: number; opacity?: number; src?: string; pageIndex?: number }) => {
+        .filter((img) => isObjectVisible(img.x, img.y, img.width, img.height))
+        .map((imgObj) => {
         const isImgSelected = pageSelected.some((o: { id: string }) => o.id === imgObj.id);
         return (
           <div
@@ -787,9 +796,9 @@ export const PageCanvas = memo(function PageCanvas({
                   else if (handle === 's') { nh += dy; }
                   else if (handle === 'e') { nw += dx; }
                   else if (handle === 'w') { nx += dx; nw -= dx; }
-                  if (nw > 10 && nh > 10) updateImageObject(imgObj.id, { x: nx, y: ny, width: nw, height: nh });
+                  // Issue #33: guard against negative or too-small dimensions during resize
+                  if (nw >= 10 && nh >= 10) updateImageObject(imgObj.id, { x: nx, y: ny, width: nw, height: nh });
                 }}
-                onRotateStart={() => {}}
                 onRotateMove={(deg) => updateImageObject(imgObj.id, { rotation: deg })}
               />
             )}
@@ -827,9 +836,9 @@ export const PageCanvas = memo(function PageCanvas({
                   else if (handle === 's') { nh += dy; }
                   else if (handle === 'e') { nw += dx; }
                   else if (handle === 'w') { nx += dx; nw -= dx; }
-                  if (nw > 10 && nh > 10) updateAnnotation(ann.id, { x: nx, y: ny, width: nw, height: nh } as any);
+                  // Issue #33: guard against negative or too-small dimensions during resize
+                  if (nw >= 10 && nh >= 10) updateAnnotation(ann.id, { x: nx, y: ny, width: nw, height: nh } as any);
                 }}
-                onRotateStart={() => {}}
                 onRotateMove={() => {}}
               />
             )}
