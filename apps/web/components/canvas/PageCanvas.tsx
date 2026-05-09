@@ -169,7 +169,14 @@ export const PageCanvas = memo(function PageCanvas({
       const ctx = canvas.getContext('2d')!;
       await pdfPage.render({ canvasContext: ctx, viewport }).promise;
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Explicit canvas cleanup to avoid memory leaks on large PDFs (#21)
+      if (canvasRef.current) {
+        canvasRef.current.width = 0;
+        canvasRef.current.height = 0;
+      }
+    };
     // pageReloadKey is intentionally omitted — we re-render via targetedReloads effect above
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfJsDoc, pageIndex, renderScale, pageReloadKey]);

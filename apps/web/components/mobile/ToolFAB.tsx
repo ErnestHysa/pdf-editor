@@ -66,6 +66,7 @@ export function ToolFAB() {
                   transform: `translate(calc(-50% + ${x}px), ${y}px)`,
                 }}
                 title={tool.label}
+                aria-label={tool.label}
               >
                 {iconMap[tool.icon]}
               </button>

@@ -18,7 +18,20 @@ export function MobileBottomSheet() {
   const { toolOptions, setToolOption } = useToolStore();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [dragY, setDragY] = useState(0);
-  const sheetHeight = mobileBottomSheetOpen ? 280 : 80;
+  const [sheetMaxHeight, setSheetMaxHeight] = useState(280);
+  const sheetHeight = mobileBottomSheetOpen ? sheetMaxHeight : 80;
+
+  // Adjust sheet height when keyboard appears via visualViewport API (mobile)
+  useEffect(() => {
+    if (!window.visualViewport) return;
+    const listener = () => {
+      const vp = window.visualViewport!;
+      const keyboardHeight = window.innerHeight - vp.height;
+      setSheetMaxHeight(keyboardHeight > 100 ? keyboardHeight + 80 : 280);
+    };
+    window.visualViewport!.addEventListener('resize', listener);
+    return () => window.visualViewport!.removeEventListener('resize', listener);
+  }, []);
 
   const pages = pdfDocument?.getPages() ?? [];
 
@@ -93,6 +106,7 @@ export function MobileBottomSheet() {
                           backgroundColor: c,
                           borderColor: toolOptions.color === c ? 'white' : 'transparent',
                         }}
+                        aria-label={`Select color ${c}`}
                       />
                     ))}
                   </div>
@@ -104,6 +118,7 @@ export function MobileBottomSheet() {
                     <button
                       onClick={() => setToolOption('fontSize', Math.max(8, (toolOptions.fontSize ?? 14) - 2))}
                       className="w-8 h-8 rounded border border-border flex items-center justify-center text-sm"
+                      aria-label="Decrease font size"
                     >
                       −
                     </button>
@@ -111,6 +126,7 @@ export function MobileBottomSheet() {
                     <button
                       onClick={() => setToolOption('fontSize', Math.min(72, (toolOptions.fontSize ?? 14) + 2))}
                       className="w-8 h-8 rounded border border-border flex items-center justify-center text-sm"
+                      aria-label="Increase font size"
                     >
                       +
                     </button>
@@ -126,6 +142,7 @@ export function MobileBottomSheet() {
                         setToolOption('fontWeight', current ? 'normal' : 'bold');
                       }}
                       className={`w-9 h-9 rounded border flex items-center justify-center font-bold ${toolOptions.fontWeight === 'bold' ? 'bg-accent text-white' : 'border-border'}`}
+                      aria-label={toolOptions.fontWeight === 'bold' ? 'Remove bold' : 'Apply bold'}
                     >
                       B
                     </button>
@@ -135,6 +152,7 @@ export function MobileBottomSheet() {
                         setToolOption('fontStyle', current ? 'normal' : 'italic');
                       }}
                       className={`w-9 h-9 rounded border flex items-center justify-center italic ${toolOptions.fontStyle === 'italic' ? 'bg-accent text-white' : 'border-border'}`}
+                      aria-label={toolOptions.fontStyle === 'italic' ? 'Remove italic' : 'Apply italic'}
                     >
                       I
                     </button>

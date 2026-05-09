@@ -85,11 +85,18 @@ export function SearchOverlay() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Call executeSearch when query changes
+  // Call executeSearch when query changes — debounced 300ms to avoid
+  // hammering the main thread on every keystroke for large documents
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   useEffect(() => {
-    if (!query.trim()) return;
-    executeSearch(query);
-  }, [query, executeSearch]);
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    if (!debouncedQuery.trim()) return;
+    executeSearch(debouncedQuery);
+  }, [debouncedQuery, executeSearch]);
 
   // Focus input when overlay opens
   useEffect(() => {

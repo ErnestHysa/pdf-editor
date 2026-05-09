@@ -114,12 +114,48 @@ export class PdfParser {
     return objects;
   }
 
+  /**
+   * parseAllPages — parses all PDF pages using requestIdleCallback to avoid
+   * blocking the main thread. Processes pages in chunks of 10, yielding to the
+   * browser between chunks so large PDFs remain responsive.
+   */
   async parseAllPages(): Promise<Map<number, ParsedTextObject[]>> {
     const pageCount = this.pdfDoc.numPages;
-    const promises = Array.from({ length: pageCount }, (_, i) => this.parsePage(i));
-    const results = await Promise.all(promises);
     const map = new Map<number, ParsedTextObject[]>();
-    results.forEach((objects, i) => map.set(i, objects));
+    const CHUNK_SIZE = 10;
+
+    // Helper to yield to main thread
+    const yieldToMain = (): Promise<void> => {
+      return new Promise((resolve) => {
+        const idleCallback =
+          typeof requestIdleCallback !== 'undefined'
+            ? requestIdleCallback
+            : null;
+        if (idleCallback) {
+          idleCallback(() => resolve());
+        } else {
+          setTimeout(() => resolve(), 0);
+        }
+      });
+    };
+
+    // Process chunk of pages
+    const parseChunk = async (start: number, end: number): Promise<void> => {
+      for (let i = start; i < end && i < pageCount; i++) {
+        const objects = await this.parsePage(i);
+        map.set(i, objects);
+      }
+    };
+
+    // Process all pages in chunks, yielding between chunks
+    for (let offset = 0; offset < pageCount; offset += CHUNK_SIZE) {
+      const end = Math.min(offset + CHUNK_SIZE, pageCount);
+      await parseChunk(offset, end);
+      if (offset + CHUNK_SIZE < pageCount) {
+        await yieldToMain();
+      }
+    }
+
     return map;
   }
 

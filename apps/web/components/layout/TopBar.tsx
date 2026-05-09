@@ -148,6 +148,7 @@ export function TopBar() {
               onClick={() => downloadPdfWithChanges()}
               className="flex items-center gap-1.5 px-2 py-1.5 rounded-sm hover:bg-bg-hover text-text-secondary text-sm transition-colors"
               title="Save (download PDF)"
+              aria-label="Save document (download PDF)"
             >
               <Save size={14} />
               {deviceType !== 'mobile' && 'Save'}

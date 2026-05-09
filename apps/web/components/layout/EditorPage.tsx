@@ -76,6 +76,10 @@ export function EditorPage() {
   // Canvas long-press handler: show context menu at viewport-relative coordinates
   // canvasX/canvasY are in canvas-space (untransformed); convert to viewport-space
   const handleCanvasLongPress = useCallback((canvasX: number, canvasY: number) => {
+    // Don't fire if user is currently editing text (mid text-tool edit session)
+    const currentTool = useToolStore.getState().activeTool;
+    if (currentTool === 'text') return;
+
     // Convert canvas coords → screen coords via the inverse of the canvas transform
     // The container div scrolls independently; use page index to get the page rect
     const pageEl = pageRefs.current[activePageIndex];
