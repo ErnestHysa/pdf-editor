@@ -87,8 +87,8 @@ export function flushSave(): void {
   // Synchronously save to IndexedDB
   const doSave = async () => {
     try {
-      const libDoc = pdfDocument.getLibDoc();
-      const pdfBytes = await libDoc.save();
+      // Use exportPdfWithChanges so the blob includes Zustand text objects (R20)
+      const pdfBytes = await exportPdfWithChanges();
       const db = await getDb();
       const now = Date.now();
 
@@ -113,11 +113,15 @@ export function flushSave(): void {
         lastModified: now,
       } as SavedDocument);
 
-      tx.oncomplete = () => {
+      tx.oncomplete = async () => {
         useDocumentStore.getState().setDirty(false);
         useDocumentStore.getState().setSaveStatus('saved');
         useDocumentStore.getState().setLastSavedAt(now);
         console.log("[Autosave] flushSave completed");
+
+        // Also persist overlay state (textObjects, annotations, etc.) alongside the blob
+        const docId = fileName ?? "unknown";
+        await saveOverlayState(docId);
       };
     } catch (err) {
       console.error("[Autosave] flushSave failed:", err);
@@ -158,8 +162,10 @@ export function useAutosave() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSequenceRef = useRef(0);
 
-  // Prune old IndexedDB entries on init (#19)
-  clearOldDocuments(5).catch(() => {});
+  // Prune old IndexedDB entries on mount only (#9)
+  useEffect(() => {
+    clearOldDocuments(5).catch(() => {});
+  }, []);
 
   // When document becomes dirty, increment edit sequence (#27)
   const prevIsDirty = useRef(false);
@@ -213,8 +219,8 @@ export function useAutosave() {
 
       try {
         setSaveStatus('saving');
-        const libDoc = pdfDocument.getLibDoc();
-        const pdfBytes = await libDoc.save();
+        // Use exportPdfWithChanges so the blob includes Zustand text objects (R20)
+        const pdfBytes = await exportPdfWithChanges();
         const now = Date.now();
 
         await db.put(STORE_NAME, {

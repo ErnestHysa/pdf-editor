@@ -535,6 +535,18 @@ export const useDocumentStore = create<DocumentState>()(
         state.clipboard = selected
           .map((sel) => state.textObjects.find((t) => t.id === sel.id))
           .filter(Boolean) as SerializableTextObject[];
+
+        // Also copy to system clipboard for OS-level paste support (R85)
+        const textToCopy = selected
+          .map((o) => {
+            const textObj = state.textObjects.find((t) => t.id === o.id);
+            return textObj?.content ?? '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        if (textToCopy && typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(textToCopy).catch(() => {});
+        }
       }),
     pasteClipboard: () =>
       set((state) => {
