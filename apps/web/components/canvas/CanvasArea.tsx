@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useToolStore } from '@/stores/toolStore';
@@ -18,7 +18,7 @@ export function CanvasArea({ className }: CanvasAreaProps) {
   const { pdfDocument, activePageIndex, setActivePage } = useDocumentStore();
   const { isDrawing } = useToolStore();
   const deviceType = useDeviceType();
-  const pages = pdfDocument?.getPages() ?? [];
+  const pages = useMemo(() => pdfDocument?.getPages() ?? [], [pdfDocument]);
 
   // Panning state
   const isPanning = useRef(false);

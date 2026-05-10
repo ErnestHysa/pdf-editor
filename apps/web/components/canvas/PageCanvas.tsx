@@ -57,12 +57,15 @@ export const PageCanvas = memo(function PageCanvas({
 }: PageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const textObjects = useObjectsStore((s) =>
-    s.textObjects.filter(o => o.pageIndex === pageIndex));
-  const imageObjects = useObjectsStore((s) =>
-    s.imageObjects.filter(o => o.pageIndex === pageIndex));
-  const annotations = useObjectsStore((s) =>
-    s.annotations.filter(a => a.pageIndex === pageIndex));
+  const textObjects = useObjectsStore(
+    (s) => s.textObjects.filter(o => o.pageIndex === pageIndex)
+  );
+  const imageObjects = useObjectsStore(
+    (s) => s.imageObjects.filter(o => o.pageIndex === pageIndex)
+  );
+  const annotations = useObjectsStore(
+    (s) => s.annotations.filter(a => a.pageIndex === pageIndex)
+  );
   const { activeTool, toolOptions } = useToolStore();
   const selectedObjects = useSelectionStore((s) => s.selectedObjects);
   const addAnnotation = useObjectsStore((s) => s.addAnnotation);

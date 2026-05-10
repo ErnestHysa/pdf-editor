@@ -148,7 +148,7 @@ export function EditorPage() {
   useAutosave();
 
   // Pages array for keyboard shortcuts hook
-  const allPages = pdfDocument ? pdfDocument.getPages() : [];
+  const allPages = useMemo(() => pdfDocument ? pdfDocument.getPages() : [], [pdfDocument]);
 
   // Delete handler (defined before useKeyboardShortcuts to avoid TDZ)
   const handleDeleteSelected = useCallback(() => {
@@ -271,7 +271,7 @@ export function EditorPage() {
 
   // ── Virtualization: only render active page ± buffer pages ─────
   const VIRTUAL_BUFFER = 3;
-  const pages = pdfDocument ? pdfDocument.getPages() : [];
+  const pages = useMemo(() => pdfDocument ? pdfDocument.getPages() : [], [pdfDocument]);
   const totalPages = pages.length;
   const virtualIndexes = Array.from(
     { length: totalPages },

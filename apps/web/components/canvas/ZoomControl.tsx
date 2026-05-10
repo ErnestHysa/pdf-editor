@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ export function ZoomControl() {
     return () => observer.disconnect();
   }, []);
 
-  const pages = pdfDocument?.getPages() ?? [];
+  const pages = useMemo(() => pdfDocument?.getPages() ?? [], [pdfDocument]);
   const activePage = pages[activePageIndex ?? 0];
   const pageWidth = activePage?.getWidth() ?? 612;
   const pageHeight = activePage?.getHeight() ?? 792;

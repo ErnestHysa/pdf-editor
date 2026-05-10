@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, memo } from 'react';
+import { memo } from 'react';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useToolStore } from '@/stores/toolStore';
 import { useObjectsStore } from '@/stores/objectsStore';
@@ -55,10 +55,12 @@ export const ObjectOverlays = memo(function ObjectOverlays({
   isObjectVisible,
   getPointerPosition,
 }: ObjectOverlaysProps) {
-  const textObjects = useObjectsStore((s) =>
-    s.textObjects.filter(o => o.pageIndex === pageIndex));
-  const imageObjects = useObjectsStore((s) =>
-    s.imageObjects.filter(o => o.pageIndex === pageIndex));
+  const textObjects = useObjectsStore(
+    (s) => s.textObjects.filter(o => o.pageIndex === pageIndex)
+  );
+  const imageObjects = useObjectsStore(
+    (s) => s.imageObjects.filter(o => o.pageIndex === pageIndex)
+  );
   const { toolOptions } = useToolStore();
   const selectedObjects = useSelectionStore((s) => s.selectedObjects);
   const updateImageObject = useObjectsStore((s) => s.updateImageObject);

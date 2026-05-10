@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { PdfEngine } from '@pagecraft/pdf-engine';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useObjectsStore } from '@/stores/objectsStore';
@@ -26,6 +26,7 @@ async function computeHash(buffer: ArrayBuffer): Promise<string> {
 
 export function useFileHandler() {
   const engineRef = useRef<PdfEngine | null>(null);
+  const handleFileRef = useRef<((file: File) => Promise<void>) | null>(null);
   const { setDocument, setLoading } = useDocumentStore();
   const { setZoom } = useUIStore();
 
@@ -35,6 +36,10 @@ export function useFileHandler() {
   }, []);
 
   const handleFile = useCallback(async (file: File): Promise<void> => {
+    // Keep ref in sync for window exposure
+    handleFileRef.current = handleFile;
+    // Expose on window for programmatic callers (DataTransfer, external scripts)
+    (window as any).__pagecraftHandleFile = handleFile;
     if (!file.type.includes('pdf') && !file.name.endsWith('.pdf')) {
       throw new Error('Please select a PDF file.');
     }

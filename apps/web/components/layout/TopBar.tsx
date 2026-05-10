@@ -3,10 +3,13 @@ import { useState, useEffect } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
+import { useToolStore } from '@/stores/toolStore';
 import { ExportDialog } from '@/components/dialogs/ExportDialog';
 import {
   Sun, Moon, Download, Share2, Settings, PanelLeft, PanelRight,
-  Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive, Loader2, Check, WifiOff
+  Undo2, Redo2, FileText, Plus, Save, ChevronDown, Image, FileArchive, Loader2, Check, WifiOff,
+  Type, Highlighter, StickyNote, MessageSquare, Pencil, Square, Circle, Minus, ArrowRight,
+  Underline, Strikethrough
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDeviceType } from '@/hooks/useDeviceType';
@@ -22,10 +25,27 @@ export function TopBar() {
   const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel, exportDialogOpen, setExportDialogOpen } = useUIStore();
   const { undo, redo, canUndo, canRedo, getLastAction } = useHistoryStore();
   const { fileName, isDirty, pdfDocument, activePageIndex, saveStatus, lastSavedAt } = useDocumentStore();
+  const { activeTool, setTool } = useToolStore();
   const deviceType = useDeviceType();
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const lastAction = getLastAction();
+
+  // Tool definitions for toolbar
+  const toolbarTools = [
+    { id: 'select', icon: 'mouse', label: 'Select' },
+    { id: 'text', icon: Type, label: 'Text' },
+    { id: 'rectangle', icon: Square, label: 'Rectangle' },
+    { id: 'ellipse', icon: Circle, label: 'Ellipse' },
+    { id: 'line', icon: Minus, label: 'Line' },
+    { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
+    { id: 'highlight', icon: Highlighter, label: 'Highlight' },
+    { id: 'underline', icon: Underline, label: 'Underline' },
+    { id: 'strikethrough', icon: Strikethrough, label: 'Strikethrough' },
+    { id: 'sticky', icon: StickyNote, label: 'Sticky Note' },
+    { id: 'comment', icon: MessageSquare, label: 'Comment' },
+    { id: 'draw', icon: Pencil, label: 'Draw' },
+  ];
 
   // Clear error after 3 seconds
   useEffect(() => {
@@ -102,40 +122,75 @@ export function TopBar() {
         )}
       </div>
 
-      {/* Center — undo/redo */}
+      {/* Center — tools + undo/redo */}
       <div className="flex-1 flex items-center justify-center gap-1">
         {pdfDocument && (
-          <div className="undo-pill flex items-center gap-1 px-2 py-1 rounded-full">
-            <button
-              onClick={undo}
-              disabled={!canUndo()}
-              className={cn(
-                'p-1 rounded transition-colors',
-                canUndo() ? 'hover:bg-bg-hover text-text-primary' : 'text-text-tertiary'
+          <>
+            {/* Tool buttons */}
+            <div className="flex items-center gap-0.5 mr-2">
+              {toolbarTools.map((tool) => {
+                const IconComp = tool.icon === 'mouse' ? null : (tool.icon as React.ComponentType<{ size: number }>);
+                const isActive = activeTool === tool.id;
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => setTool(tool.id as any)}
+                    className={cn(
+                      'p-1.5 rounded transition-colors',
+                      isActive
+                        ? 'bg-accent text-white'
+                        : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
+                    )}
+                    title={tool.label}
+                    aria-label={tool.label}
+                    aria-pressed={isActive}
+                  >
+                    {tool.icon === 'mouse' ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+                        <path d="M13 13l6 6"/>
+                      </svg>
+                    ) : IconComp ? (
+                      <IconComp size={14} />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="h-4 w-px bg-border mx-1" />
+            {/* Undo/redo */}
+            <div className="undo-pill flex items-center gap-1 px-2 py-1 rounded-full">
+              <button
+                onClick={undo}
+                disabled={!canUndo()}
+                className={cn(
+                  'p-1 rounded transition-colors',
+                  canUndo() ? 'hover:bg-bg-hover text-text-primary' : 'text-text-tertiary'
+                )}
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+              >
+                <Undo2 size={14} />
+              </button>
+              {lastAction && (
+                <span className="text-xs text-text-tertiary px-1 max-w-[120px] truncate">
+                  {lastAction.label}
+                </span>
               )}
-              title="Undo (Ctrl+Z)"
-              aria-label="Undo"
-            >
-              <Undo2 size={14} />
-            </button>
-            {lastAction && (
-              <span className="text-xs text-text-tertiary px-1 max-w-[120px] truncate">
-                {lastAction.label}
-              </span>
-            )}
-            <button
-              onClick={redo}
-              disabled={!canRedo()}
-              className={cn(
-                'p-1 rounded transition-colors',
-                canRedo() ? 'hover:bg-bg-hover text-text-primary' : 'text-text-tertiary'
-              )}
-              title="Redo (Ctrl+Shift+Z)"
-              aria-label="Redo"
-            >
-              <Redo2 size={14} />
-            </button>
-          </div>
+              <button
+                onClick={redo}
+                disabled={!canRedo()}
+                className={cn(
+                  'p-1 rounded transition-colors',
+                  canRedo() ? 'hover:bg-bg-hover text-text-primary' : 'text-text-tertiary'
+                )}
+                title="Redo (Ctrl+Shift+Z)"
+                aria-label="Redo"
+              >
+                <Redo2 size={14} />
+              </button>
+            </div>
+          </>
         )}
       </div>
 

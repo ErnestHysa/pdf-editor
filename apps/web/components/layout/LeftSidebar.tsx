@@ -34,13 +34,29 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
     setInsertDialogOpen(true);
   }, []);
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
+
   const handleDeletePage = useCallback(
     (index: number) => {
       deletePage(index);
       setContextMenuPageIndex(null);
+      setShowDeleteConfirm(false);
+      setPendingDeleteIndex(null);
     },
     [deletePage]
   );
+
+  const openDeleteConfirm = useCallback((index: number) => {
+    setPendingDeleteIndex(index);
+    setShowDeleteConfirm(true);
+  }, []);
+
+  const closeDeleteConfirm = useCallback(() => {
+    setShowDeleteConfirm(false);
+    setPendingDeleteIndex(null);
+    setContextMenuPageIndex(null);
+  }, []);
 
   const handleDuplicatePage = useCallback(
     (index: number) => {
@@ -180,7 +196,7 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
                     <>
                       <div className="h-px bg-border my-1" />
                       <button
-                        onClick={() => handleDeletePage(contextMenuPageIndex)}
+                        onClick={() => openDeleteConfirm(contextMenuPageIndex)}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-destructive"
                       >
                         <Trash2 size={14} />
@@ -220,6 +236,31 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
         mode={insertDialogMode}
         insertAfterIndex={activePageIndex}
       />
+
+      {/* Delete page confirmation dialog */}
+      {showDeleteConfirm && pendingDeleteIndex !== null && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={closeDeleteConfirm} />
+          <div className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-bg-elevated border border-border rounded-xl shadow-2xl p-6 w-80">
+            <h3 className="text-base font-semibold text-text-primary mb-2">Delete this page?</h3>
+            <p className="text-sm text-text-secondary mb-6">This cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={closeDeleteConfirm}
+                className="px-4 py-2 text-sm rounded-lg border border-border text-text-secondary hover:bg-bg-hover transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeletePage(pendingDeleteIndex)}
+                className="px-4 py-2 text-sm rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Signature pad dialog */}
       <SignaturePad

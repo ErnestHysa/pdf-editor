@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useToolStore } from '@/stores/toolStore';
@@ -33,7 +33,7 @@ export function MobileBottomSheet() {
     return () => window.visualViewport!.removeEventListener('resize', listener);
   }, []);
 
-  const pages = pdfDocument?.getPages() ?? [];
+  const pages = useMemo(() => pdfDocument?.getPages() ?? [], [pdfDocument]);
 
   return (
     <>
