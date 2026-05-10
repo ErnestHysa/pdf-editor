@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { useDocumentStore } from '@/stores/documentStore';
-import { PdfParser } from '@/hooks/usePdfParser';
+import { PdfParser } from '@pagecraft/pdf-engine';
 import { cn } from '@/lib/utils';
 
 interface FontWarningBannerProps {

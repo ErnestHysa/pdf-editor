@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useToolStore } from '@/stores/toolStore';
@@ -23,6 +23,32 @@ export function CanvasArea({ className }: CanvasAreaProps) {
   // Panning state
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+
+  // Space+drag panning state
+  const spaceDown = useRef(false);
+  const spacePanning = useRef(false);
+
+  // Keyboard listener for Space key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        spaceDown.current = true;
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spaceDown.current = false;
+        spacePanning.current = false;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   const handleWheel: React.WheelEventHandler<HTMLDivElement> = useCallback((e) => {
     if (e.ctrlKey || e.metaKey) {
@@ -50,6 +76,11 @@ export function CanvasArea({ className }: CanvasAreaProps) {
     if (e.button === 1 || (e.button === 0 && !isDrawing)) {
       isPanning.current = true;
       panStart.current = { x: e.clientX, y: e.clientY, offsetX: panOffset.x, offsetY: panOffset.y };
+    } else if (e.button === 0 && spaceDown.current) {
+      // Space+drag pan
+      spacePanning.current = true;
+      isPanning.current = true;
+      panStart.current = { x: e.clientX, y: e.clientY, offsetX: panOffset.x, offsetY: panOffset.y };
     }
   }, [isDrawing, panOffset]);
 
@@ -60,12 +91,22 @@ export function CanvasArea({ className }: CanvasAreaProps) {
     setPanOffset({ x: panStart.current.offsetX + dx, y: panStart.current.offsetY + dy });
   }, [setPanOffset]);
 
-  const onMouseUp = useCallback(() => { isPanning.current = false; }, []);
+  const onMouseUp = useCallback(() => {
+    isPanning.current = false;
+    spacePanning.current = false;
+  }, []);
+
+  // Determine cursor style
+  const cursorClass = isPanning.current
+    ? 'cursor-grabbing'
+    : spaceDown.current
+      ? 'cursor-grab'
+      : 'cursor-default';
 
   return (
     <div
       ref={containerRef}
-      className={cn('relative overflow-auto bg-bg-base', isPanning.current ? 'cursor-grabbing' : 'cursor-default', className)}
+      className={cn('relative overflow-auto bg-bg-base', cursorClass, className)}
       style={{ touchAction: 'none' }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}

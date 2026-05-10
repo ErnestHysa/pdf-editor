@@ -1,6 +1,4 @@
-"use client";
 import { PDFDocument, PDFArray, PDFObject, PDFName } from "pdf-lib";
-import { useDocumentStore } from "@/stores/documentStore";
 
 /**
  * C4: Glyph-level text editing for formatting preservation.
@@ -28,9 +26,9 @@ export function glyphPreservingEdit(
   objectRef: string,
   oldText: string,
   newText: string,
+  pdfDocument: import('./Document').PdfDocument | null,
 ): boolean {
   try {
-    const { pdfDocument } = useDocumentStore.getState();
     if (!pdfDocument) return false;
 
     const libDoc = pdfDocument.getLibDoc();

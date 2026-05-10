@@ -1,9 +1,9 @@
 "use client";
 import { PDFDocument, PDFName, PDFDict, PDFString, PDFObject, PDFArray, PDFRef, rgb, StandardFonts, degrees, PDFOperator, PDFPage } from "pdf-lib";
 import { useDocumentStore } from "@/stores/documentStore";
-import { createNativeAnnotation, hexToRgbArray } from "@/lib/pdf/annotationBuilder";
-import { parseHexColor, lightenColor } from "@/lib/pdf/textExtractor";
-import { glyphPreservingEdit } from "@/lib/pdf/glyphEditor";
+import { useObjectsStore } from "@/stores/objectsStore";
+import { useSearchStore } from "@/stores/searchStore";
+import { createNativeAnnotation, hexToRgbArray, parseHexColor, lightenColor, glyphPreservingEdit } from "@pagecraft/pdf-engine";
 import { optimizePdfStandard } from "@/lib/pdf/optimizer";
 
 /**
@@ -31,13 +31,14 @@ function applyFormFieldValuesToDoc(libDoc: PDFDocument): void {
     const fieldsRef = acroForm.get(PDFName.of("Fields"));
     if (!fieldsRef) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fields = (fieldsRef as any).value ?? fieldsRef;
+    // Fields entry is an array of indirect references; .value gives the PDFArray
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AcroForm Fields access is not in public pdf-lib types
+    const fields = (fieldsRef as unknown as { value?: PDFArray }).value ?? fieldsRef as PDFArray;
     if (!Array.isArray(fields)) return;
 
     for (const fieldRef of fields) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let fieldDict = (fieldRef as any).lookup?.() ?? fieldRef as any;
+      // Look up the field dict (dereference the indirect reference)
+      const fieldDict = (fieldRef as unknown as { lookup?(): PDFDict }).lookup?.() ?? fieldRef as PDFDict;
       if (!fieldDict || typeof fieldDict.get !== "function") continue;
 
       const fieldName = fieldDict.get(PDFName.of("T"));
@@ -56,7 +57,7 @@ function applyFormFieldValuesToDoc(libDoc: PDFDocument): void {
           fieldDict.set(PDFName.of("V"), newValue ? PDFName.of("Yes") : PDFName.of("Off"));
           fieldDict.set(PDFName.of("AS"), newValue ? PDFName.of("Yes") : PDFName.of("Off"));
         } else {
-          // #13: Radio button group handling — track group and enforce exclusivity
+          
           const newV = PDFName.of(String(newValue));
           fieldDict.set(PDFName.of("V"), newV);
           fieldDict.set(PDFName.of("AS"), newV);
@@ -65,8 +66,8 @@ function applyFormFieldValuesToDoc(libDoc: PDFDocument): void {
           if (groupName) {
             const groupStr = String(groupName);
             for (const otherRef of fields) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const otherDict = (otherRef as any).lookup?.() ?? otherRef as any;
+              // Dereference the indirect reference to get the field dict
+              const otherDict = (otherRef as unknown as { lookup?(): PDFDict }).lookup?.() ?? otherRef as PDFDict;
               if (!otherDict || otherDict === fieldDict) continue;
               const otherGroup = otherDict.get?.(PDFName.of("G"));
               if (otherGroup && String(otherGroup) === groupStr) {
@@ -106,7 +107,8 @@ function applyFormFieldValuesToDoc(libDoc: PDFDocument): void {
  * Future (R21+): Parse raw PDF content streams for true in-place replacement.
  */
 export async function exportPdfWithChanges(): Promise<Uint8Array> {
-  const { pdfDocument, textObjects } = useDocumentStore.getState();
+  const { pdfDocument } = useDocumentStore.getState();
+  const { textObjects } = useObjectsStore.getState();
 
   if (!pdfDocument) throw new Error("No PDF document loaded");
 
@@ -189,9 +191,9 @@ export async function exportPdfWithChanges(): Promise<Uint8Array> {
     }
   }
 
-  // #10: Process user-added Zustand images onto the PDF
+  
   // TODO: This only handles Zustand-overlay images, not engine images from the PDF itself
-  const { imageObjects: zustandImages } = useDocumentStore.getState();
+  const { imageObjects: zustandImages } = useObjectsStore.getState();
   const imageByPage = new Map<number, typeof zustandImages>();
   for (const obj of zustandImages) {
     const existing = imageByPage.get(obj.pageIndex) ?? [];
@@ -234,7 +236,9 @@ export async function exportPdfWithChanges(): Promise<Uint8Array> {
  * This draws all editing layer content directly onto each page for "final" PDFs.
  */
 export async function exportPdfFlattened(): Promise<Uint8Array> {
-  const { pdfDocument, textObjects, annotations, imageObjects } = useDocumentStore.getState();
+  const { pdfDocument } = useDocumentStore.getState();
+  const { textObjects, imageObjects } = useObjectsStore.getState();
+  const { annotations } = useObjectsStore.getState();
 
   if (!pdfDocument) throw new Error("No PDF document loaded");
 
@@ -621,7 +625,8 @@ export async function downloadPageAsJpeg(pageIndex: number, quality = 0.9): Prom
  * remaining fully compatible across all PDF readers.
  */
 export async function exportPdfWithNativeAnnotations(): Promise<Uint8Array> {
-  const { pdfDocument, annotations, textObjects } = useDocumentStore.getState();
+  const { pdfDocument } = useDocumentStore.getState();
+  const { annotations, textObjects } = useObjectsStore.getState();
   if (!pdfDocument) throw new Error("No PDF document loaded");
 
   const libDoc = pdfDocument.getLibDoc();
@@ -666,7 +671,8 @@ export async function exportPdfWithNativeAnnotations(): Promise<Uint8Array> {
     for (const ann of pageAnnotations) {
       // drawing type: embed as image (not a native PDF annotation type)
       if (ann.type === 'drawing') {
-        const imgData = (ann as any).imageData;
+        // DrawingAnnotation has imageData as a property but AnnotationObject union doesn't expose it
+        const imgData = (ann as unknown as { imageData?: string }).imageData;
         if (imgData) {
           try {
             const raw = imgData.startsWith("data:image")
@@ -695,8 +701,8 @@ export async function exportPdfWithNativeAnnotations(): Promise<Uint8Array> {
       const existingAnnots = page.node.get(PDFName.of('Annots'));
       if (existingAnnots) {
         // Merge with existing annotations
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const existing = (existingAnnots as any).value ?? existingAnnots;
+        // existingAnnots may be an indirect ref whose .value is the PDFArray
+        const existing = (existingAnnots as unknown as { value?: PDFArray }).value ?? existingAnnots;
         if (Array.isArray(existing)) {
           for (const ref of annotationRefs) {
             existing.push(ref);

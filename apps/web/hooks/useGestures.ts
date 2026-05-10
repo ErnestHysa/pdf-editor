@@ -140,5 +140,5 @@ export function useGestures(ref: React.RefObject<HTMLElement | null>, handlers: 
       el.removeEventListener('touchend', onTouchEnd);
       if (state.current.longPressTimer) clearTimeout(state.current.longPressTimer);
     };
-  }, [ref, zoom, handlers, setZoom]);
+  }, [ref, zoom, panOffset, handlers, setZoom, setPanOffset]);
 }

@@ -2,7 +2,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { useDocumentStore, type SerializableTextObject, type SerializableImageObject } from '@/stores/documentStore';
+import { useObjectsStore } from '@/stores/objectsStore';
+import { useSelectionStore } from '@/stores/selectionStore';
 import { useToolStore, ToolOptions } from "@/stores/toolStore";
+import { DEFAULT_STAMPS } from '@pagecraft/pdf-engine';
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FormFieldPanel } from "./FormFieldPanel";
@@ -13,9 +16,16 @@ interface RightPanelProps {
 
 export function RightPanel({ open }: RightPanelProps) {
   const { rightPanelOpen, toggleRightPanel } = useUIStore();
-  const { selectedObjects, pdfDocument, forceReload, textObjects, updateTextObject, setDirty,
-    imageObjects, updateImageObject, removeImageObject } = useDocumentStore();
+  const { pdfDocument, forceReload, setDirty } = useDocumentStore();
+  const selectedObjects = useSelectionStore((s) => s.selectedObjects);
+  const textObjects = useObjectsStore((s) => s.textObjects);
+  const updateTextObject = useObjectsStore((s) => s.updateTextObject);
+  const imageObjects = useObjectsStore((s) => s.imageObjects);
+  const updateImageObject = useObjectsStore((s) => s.updateImageObject);
+  const removeImageObject = useObjectsStore((s) => s.removeImageObject);
+  const clearSelection = useSelectionStore((s) => s.clearSelection);
   const { toolOptions, setToolOption } = useToolStore();
+  const { activeTool } = useToolStore();
 
   if (!open || !rightPanelOpen) return null;
 
@@ -60,6 +70,7 @@ export function RightPanel({ open }: RightPanelProps) {
                 ? textObjects.find((o: any) => o.id === selection.id)
                 : undefined
             }
+            toolOptions={toolOptions}
             onStyleChange={(updates) => {
               if (selection.id) {
                 updateTextObject(selection.id, updates);
@@ -83,7 +94,7 @@ export function RightPanel({ open }: RightPanelProps) {
             onDeleteImage={() => {
               if (selection.id) {
                 removeImageObject(selection.id);
-                useDocumentStore.getState().clearSelection();
+                clearSelection();
                 setDirty(true);
               }
             }}
@@ -106,6 +117,13 @@ export function RightPanel({ open }: RightPanelProps) {
 
         {selection?.type === "annotation" && (
           <AnnotationPropertiesPanel
+            toolOptions={toolOptions}
+            setToolOption={setToolOption as (key: string, value: unknown) => void}
+          />
+        )}
+
+        {activeTool === 'stamp' && (
+          <StampToolPanel
             toolOptions={toolOptions}
             setToolOption={setToolOption as (key: string, value: unknown) => void}
           />
@@ -224,12 +242,15 @@ function PagePropertiesPanel({ page, onRotateDone }: { page: any; onRotateDone: 
 function TextPropertiesPanel({
   selectedObject,
   onStyleChange,
+  toolOptions,
 }: {
   selectedObject?: SerializableTextObject;
   onStyleChange: (updates: Partial<SerializableTextObject>) => void;
+  toolOptions: ToolOptions;
 }) {
   // Use selected object's style directly
   const fontSize = selectedObject?.fontSize ?? 14;
+  const fontFamily = selectedObject?.fontFamily ?? toolOptions.fontFamily ?? 'DM Sans';
   const textColor = selectedObject?.color ?? '#F0EDE8';
   const fontWeight = selectedObject?.fontWeight ?? 'normal';
   const fontStyle = selectedObject?.fontStyle ?? 'normal';
@@ -245,6 +266,21 @@ function TextPropertiesPanel({
           className="w-full bg-bg-elevated border border-border rounded px-2 py-1 text-sm font-mono text-text-primary"
           min={6} max={200}
         />
+      </PropertySection>
+
+      <PropertySection title="Font Family">
+        <select
+          value={fontFamily}
+          onChange={(e) => onStyleChange({ fontFamily: e.target.value })}
+          className="w-full bg-bg-elevated border border-border rounded px-2 py-1 text-sm text-text-primary cursor-pointer"
+        >
+          <option value="DM Sans">DM Sans</option>
+          <option value="Helvetica">Helvetica</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Verdana">Verdana</option>
+        </select>
       </PropertySection>
 
       <PropertySection title="Color">
@@ -470,6 +506,101 @@ function PropertySection({ title, children }: { title: string; children: React.R
         {title}
       </label>
       {children}
+    </div>
+  );
+}
+
+function StampToolPanel({ toolOptions, setToolOption }: { toolOptions: ToolOptions; setToolOption: any }) {
+  const [customText, setCustomText] = useState('');
+
+  const handlePresetSelect = (label: string, backgroundColor: string) => {
+    setToolOption('stampLabel', label);
+    setToolOption('stampBackgroundColor', backgroundColor);
+    setCustomText('');
+  };
+
+  const handleCustomApply = () => {
+    const text = customText.trim() || 'STAMP';
+    setToolOption('stampLabel', text);
+    setToolOption('stampBackgroundColor', '#4CAF7D');
+  };
+
+  return (
+    <div className="space-y-4">
+      <PropertySection title="Stamp Presets">
+        <div className="flex flex-col gap-1.5">
+          {DEFAULT_STAMPS.map((stamp) => {
+            const textColor = stamp.backgroundColor.startsWith('#')
+              ? (() => {
+                  const r = parseInt(stamp.backgroundColor.slice(1, 3), 16);
+                  const g = parseInt(stamp.backgroundColor.slice(3, 5), 16);
+                  const b = parseInt(stamp.backgroundColor.slice(5, 7), 16);
+                  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                  return luminance > 0.6 ? '#000000' : '#ffffff';
+                })()
+              : '#ffffff';
+            return (
+              <button
+                key={stamp.label}
+                onClick={() => handlePresetSelect(stamp.label, stamp.backgroundColor)}
+                className={cn(
+                  "w-full px-3 py-2 rounded text-xs font-bold uppercase tracking-wider transition-all",
+                  toolOptions.stampLabel === stamp.label
+                    ? "ring-2 ring-accent ring-offset-1"
+                    : "hover:brightness-110"
+                )}
+                style={{
+                  backgroundColor: stamp.backgroundColor,
+                  color: textColor,
+                }}
+              >
+                {stamp.label}
+              </button>
+            );
+          })}
+        </div>
+      </PropertySection>
+
+      <PropertySection title="Custom Text">
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={customText}
+            onChange={(e) => setCustomText(e.target.value)}
+            placeholder="Enter custom stamp..."
+            className="flex-1 bg-bg-elevated border border-border rounded px-2 py-1 text-sm text-text-primary"
+            maxLength={30}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCustomApply();
+            }}
+          />
+          <button
+            onClick={handleCustomApply}
+            className="px-3 py-1 rounded bg-accent text-white text-xs font-medium hover:opacity-90 transition-opacity"
+          >
+            Apply
+          </button>
+        </div>
+        {toolOptions.stampLabel && !DEFAULT_STAMPS.some(s => s.label === toolOptions.stampLabel) && (
+          <div
+            className="mt-2 px-3 py-2 rounded text-xs font-bold uppercase tracking-wider text-center"
+            style={{
+              backgroundColor: toolOptions.stampBackgroundColor ?? '#4CAF7D',
+              color: (toolOptions.stampBackgroundColor ?? '#4CAF7D').startsWith('#')
+                ? (() => {
+                    const r = parseInt((toolOptions.stampBackgroundColor ?? '#4CAF7D').slice(1, 3), 16);
+                    const g = parseInt((toolOptions.stampBackgroundColor ?? '#4CAF7D').slice(3, 5), 16);
+                    const b = parseInt((toolOptions.stampBackgroundColor ?? '#4CAF7D').slice(5, 7), 16);
+                    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                    return luminance > 0.6 ? '#000000' : '#ffffff';
+                  })()
+                : '#ffffff',
+            }}
+          >
+            {toolOptions.stampLabel}
+          </div>
+        )}
+      </PropertySection>
     </div>
   );
 }

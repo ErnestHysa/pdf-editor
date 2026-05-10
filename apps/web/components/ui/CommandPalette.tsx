@@ -4,6 +4,7 @@ import { useToolStore } from '@/stores/toolStore';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useSelectionStore } from '@/stores/selectionStore';
 import { downloadPdfWithChanges } from '@/hooks/usePdfExporter';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +23,7 @@ export function CommandPalette({ open = false, onClose }: { open?: boolean; onCl
   const { setTool } = useToolStore();
   const { undo, redo, push } = useHistoryStore();
   const { pdfDocument } = useDocumentStore();
-  const { clearSelection } = useDocumentStore();
+  const clearSelection = useSelectionStore((s) => s.clearSelection);
   const { setZoom } = useUIStore();
 
   const commands: Command[] = [

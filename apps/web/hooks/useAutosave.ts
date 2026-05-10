@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { openDB, IDBPDatabase } from "idb";
 import { useDocumentStore } from "@/stores/documentStore";
+import { useObjectsStore } from "@/stores/objectsStore";
+import { useSearchStore } from "@/stores/searchStore";
 import { useHistoryStore } from "@/stores/historyStore";
 import { useUIStore } from "@/stores/uiStore";
 import { exportPdfWithChanges } from "./usePdfExporter";
@@ -510,16 +512,18 @@ interface OverlayState {
 /** Save the current Zustand overlay state to IndexedDB */
 export async function saveOverlayState(docId: string): Promise<void> {
   try {
-    const state = useDocumentStore.getState();
+    const docState = useDocumentStore.getState();
+    const objectsState = useObjectsStore.getState();
+    const searchState = useSearchStore.getState();
     const overlay: OverlayState = {
-      textObjects: state.textObjects,
-      imageObjects: state.imageObjects,
-      annotations: state.annotations,
-      formFieldValues: state.formFieldValues,
-      pendingSignature: state.pendingSignature,
-      searchQuery: state.searchQuery,
-      searchActiveMatches: state.searchActiveMatches,
-      searchCurrentMatchIndex: state.searchCurrentMatchIndex,
+      textObjects: objectsState.textObjects,
+      imageObjects: objectsState.imageObjects,
+      annotations: objectsState.annotations,
+      formFieldValues: docState.formFieldValues,
+      pendingSignature: docState.pendingSignature,
+      searchQuery: searchState.searchQuery,
+      searchActiveMatches: searchState.searchActiveMatches,
+      searchCurrentMatchIndex: searchState.searchCurrentMatchIndex,
     };
     const db = await getDb();
     await db.put(OVERLAY_STORE_NAME, { docId, ...overlay }, docId);
@@ -543,12 +547,16 @@ export async function loadOverlayState(
   }
 }
 
-/** Apply restored overlay state to the document store (search, etc.) */
+/** Apply restored overlay state to the relevant stores */
 export function applyOverlayState(overlay: OverlayState): void {
-  const store = useDocumentStore.getState();
-  if (overlay.searchQuery !== undefined) store.setSearchQuery(overlay.searchQuery);
-  if (overlay.searchActiveMatches !== undefined) store.setSearchActiveMatches(overlay.searchActiveMatches);
-  if (overlay.searchCurrentMatchIndex !== undefined) store.setSearchCurrentMatchIndex(overlay.searchCurrentMatchIndex);
+  const objectsStore = useObjectsStore.getState();
+  const searchStore = useSearchStore.getState();
+  if (overlay.textObjects !== undefined) objectsStore.setTextObjects(overlay.textObjects);
+  if (overlay.imageObjects !== undefined) objectsStore.setImageObjects(overlay.imageObjects);
+  if (overlay.annotations !== undefined) objectsStore.setAnnotations(overlay.annotations);
+  if (overlay.searchQuery !== undefined) searchStore.setSearchQuery(overlay.searchQuery);
+  if (overlay.searchActiveMatches !== undefined) searchStore.setSearchActiveMatches(overlay.searchActiveMatches);
+  if (overlay.searchCurrentMatchIndex !== undefined) searchStore.setSearchCurrentMatchIndex(overlay.searchCurrentMatchIndex);
 }
 
 /** Delete saved overlay state for a document */

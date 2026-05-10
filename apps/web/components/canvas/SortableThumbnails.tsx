@@ -131,7 +131,7 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
     }
   }, [pdfJsDoc, pageIndex, width, height, thumbWidth]);
 
-  // Issue #5: render via useEffect instead of ref comparison in render body.
+  
   // The ref comparison (pdfJsDoc !== prevPdfJsDocRef.current) fires during
   // render which bypasses React's scheduler — useEffect schedules it properly.
   useEffect(() => {

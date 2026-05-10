@@ -6,7 +6,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { cn } from "@/lib/utils";
 import {
   exportPdfWithChanges,
-  exportPdfFlattened,
+  exportPdfWithNativeAnnotations,
   exportPdfOptimized,
   exportPageAsImage,
 } from "@/hooks/usePdfExporter";
@@ -102,7 +102,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
       } else {
         let bytes: Uint8Array;
         if (format === "flattened") {
-          bytes = await exportPdfFlattened();
+          bytes = await exportPdfWithNativeAnnotations();
         } else if (format === "optimized") {
           bytes = await exportPdfOptimized();
         } else {

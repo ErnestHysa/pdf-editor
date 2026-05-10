@@ -1,6 +1,8 @@
 'use client';
 import { useCallback } from 'react';
-import { useDocumentStore, SerializableTextObject } from '@/stores/documentStore';
+import { useDocumentStore } from '@/stores/documentStore';
+import { useObjectsStore } from '@/stores/objectsStore';
+import { useSearchStore } from '@/stores/searchStore';
 
 interface SearchMatch {
   textObjectId: string;
@@ -21,15 +23,15 @@ interface SearchMatch {
  * clearSearch() resets both fields.
  */
 export function useSearch() {
+  const { pdfJsDoc } = useDocumentStore();
+  const { textObjects } = useObjectsStore();
   const {
-    textObjects,
-    pdfJsDoc,
     searchActiveMatches,
     searchCurrentMatchIndex,
     setSearchActiveMatches,
     setSearchCurrentMatchIndex,
     clearSearch: storeClearSearch,
-  } = useDocumentStore();
+  } = useSearchStore();
 
   /**
    * Search the full document for `query` and populate store with matches.

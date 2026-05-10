@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { PdfDocument } from '@pagecraft/pdf-engine';
-import { useHistoryStore } from './historyStore';
 import { useUIStore } from './uiStore';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PdfJsDocumentProxy = any;
 
 // ── Annotation types ────────────────────────────────────────────
 
@@ -16,7 +18,8 @@ export type AnnotationType =
   | 'rectangle'
   | 'ellipse'
   | 'arrow'
-  | 'line';
+  | 'line'
+  | 'stamp';
 
 export interface BaseAnnotation {
   id: string;
@@ -67,13 +70,20 @@ export interface ShapeAnnotation extends BaseAnnotation {
   filled: boolean;
 }
 
+export interface StampAnnotation extends BaseAnnotation {
+  type: 'stamp';
+  label: string;
+  backgroundColor: string;
+}
+
 export type AnnotationObject =
   | HighlightAnnotation
   | LineAnnotation
   | StickyAnnotation
   | CommentAnnotation
   | DrawingAnnotation
-  | ShapeAnnotation;
+  | ShapeAnnotation
+  | StampAnnotation;
 
 /** Serializable text object for use in Zustand store */
 export interface SerializableTextObject {
@@ -130,14 +140,9 @@ export interface SelectedObject {
   pageIndex: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PdfJsDocumentProxy = any;
-
 export interface DocumentState {
   pdfDocument: PdfDocument | null;
   pdfJsDoc: PdfJsDocumentProxy | null; // pdf.js document proxy for rendering
-  textObjects: SerializableTextObject[];       // parsed text objects from PdfParser
-  imageObjects: SerializableImageObject[];      // image objects added by user
   fileName: string;
   fileSize: number;
   /** SHA-256 content hash — stable document identity for IndexedDB keys */
@@ -146,7 +151,6 @@ export interface DocumentState {
   isLoading: boolean;
   saveStatus: 'idle' | 'saving' | 'saved' | 'offline';
   lastSavedAt: number | null;
-  selectedObjects: SelectedObject[];
   activePageIndex: number;
   reloadTrigger: number; // incremented to force full pdf.js reload (all pages)
   // Per-page targeted reload: pageIndex → timestamp (epoch ms)
@@ -155,10 +159,7 @@ export interface DocumentState {
   // clearPartialReload(pageIndex) to avoid stale-entry accumulation.
   targetedReloads: Record<number, number>;
   // Parsing progress (0-100) — updated during parseAllPages so UI can show "Parsing X of Y"
-  // TODO: UI is not yet wired up to display this value.
   parsingProgress: number;
-  clipboard: SerializableTextObject[]; // copied text objects for paste
-  annotations: AnnotationObject[]; // R35-R42 annotation objects
 
   // Actions
   setDocument: (doc: PdfDocument | null, fileName?: string, fileSize?: number, docId?: string) => void;
@@ -167,27 +168,14 @@ export interface DocumentState {
   setDirty: (dirty: boolean) => void;
   setSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'offline') => void;
   setLastSavedAt: (timestamp: number | null) => void;
-  selectObject: (obj: SelectedObject | null) => void;
-  selectObjects: (objs: SelectedObject[]) => void;
-  clearSelection: () => void;
-  copySelected: () => void;
-  pasteClipboard: () => void;
-  duplicateSelected: () => void;
   setActivePage: (index: number) => void;
+  setParsingProgress: (progress: number) => void;
   forceReload: () => void;
   /** Reload the document from a raw ArrayBuffer (used by conflict resolution to reload external changes) */
   reloadFromBuffer: (buffer: ArrayBuffer, fileName?: string, fileSize?: number) => Promise<void>;
   addPartialReload: (pageIndex: number) => void;
   /** Clears the targeted reload timestamp for the given page after the canvas consumes it. (#27) */
   clearPartialReload: (pageIndex: number) => void;
-  setTextObjects: (objects: SerializableTextObject[]) => void;
-  setImageObjects: (objects: SerializableImageObject[]) => void;
-  setAnnotations: (annotations: AnnotationObject[]) => void;
-  addTextObject: (obj: SerializableTextObject) => void;
-  removeTextObject: (id: string) => void;
-  updateTextObject: (id: string, updates: Partial<SerializableTextObject>) => void;
-  addToSelection: (obj: SelectedObject) => void;
-  removeFromSelection: (id: string) => void;
   reset: () => void;
   // Page management
   addPage: (afterIndex?: number, size?: { width: number; height: number }) => void;
@@ -197,14 +185,6 @@ export interface DocumentState {
   rotatePage: (index: number, direction: "left" | "right") => void;
   cropPage: (index: number, bounds?: { x: number; y: number; width: number; height: number }) => void;
   insertPagesFromFile: (file: File, afterIndex: number) => Promise<number>;
-  // Annotation management (R35-R42)
-  addAnnotation: (annotation: AnnotationObject) => void;
-  removeAnnotation: (id: string) => void;
-  updateAnnotation: (id: string, updates: Partial<AnnotationObject>) => void;
-  // Image management (R43-R47)
-  addImageObject: (obj: ImageObjectInput) => void;
-  removeImageObject: (id: string) => void;
-  updateImageObject: (id: string, updates: Partial<SerializableImageObject>) => void;
   // Form field management (R65)
   formFieldValues: Record<string, string | boolean>; // field name -> modified value
   updateFormFieldValue: (fieldName: string, value: string | boolean) => void;
@@ -212,20 +192,6 @@ export interface DocumentState {
   // Pending signature (R66)
   pendingSignature: { dataUrl: string; width: number; height: number } | null;
   setPendingSignature: (sig: { dataUrl: string; width: number; height: number } | null) => void;
-  // Search state (B3)
-  searchQuery: string;
-  searchActiveMatches: Array<{
-    textObjectId: string;
-    pageIndex: number;
-    matchStart: number;
-    matchEnd: number;
-    matchText: string;
-  }>;
-  searchCurrentMatchIndex: number;
-  setSearchQuery: (query: string) => void;
-  setSearchActiveMatches: (matches: DocumentState['searchActiveMatches']) => void;
-  setSearchCurrentMatchIndex: (index: number) => void;
-  clearSearch: () => void;
 }
 
 const initialState = {
@@ -238,20 +204,12 @@ const initialState = {
   isLoading: false,
   saveStatus: 'idle' as const,
   lastSavedAt: null,
-  selectedObjects: [],
   activePageIndex: 0,
   reloadTrigger: 0,
   targetedReloads: {},
-  textObjects: [],
-  imageObjects: [],
-  clipboard: [],
-  annotations: [],
+  parsingProgress: 0,
   formFieldValues: {},
   pendingSignature: null,
-  searchQuery: '',
-  searchActiveMatches: [],
-  searchCurrentMatchIndex: 0,
-  parsingProgress: 0,
 };
 
 /** Compute SHA-256 hash of a buffer for stable document identity */
@@ -260,6 +218,9 @@ async function computeHash(buffer: ArrayBuffer): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+/** Re-export PdfDocument type for external consumers */
+export type { PdfDocument } from '@pagecraft/pdf-engine';
 
 export const useDocumentStore = create<DocumentState>()(
   immer((set) => ({
@@ -273,9 +234,7 @@ export const useDocumentStore = create<DocumentState>()(
         state.isDirty = false;
         state.saveStatus = 'idle';
         state.lastSavedAt = null;
-        state.selectedObjects = [];
         state.activePageIndex = 0;
-        state.textObjects = []; // clear parsed text objects
         state.pdfJsDoc = null;  // clear pdf.js doc so canvases unmount
       }),
     setPdfJsDoc: (doc) =>
@@ -288,22 +247,12 @@ export const useDocumentStore = create<DocumentState>()(
       set((state) => { state.saveStatus = status; }),
     setLastSavedAt: (timestamp: number | null) =>
       set((state) => { state.lastSavedAt = timestamp; }),
-    selectObject: (obj) =>
-      set((state) => {
-        state.selectedObjects = obj ? [obj] : [];
-      }),
-    selectObjects: (objs) =>
-      set((state) => {
-        state.selectedObjects = objs;
-      }),
-    clearSelection: () =>
-      set((state) => {
-        state.selectedObjects = [];
-      }),
     setActivePage: (index) =>
       set((state) => {
         state.activePageIndex = index;
       }),
+    setParsingProgress: (progress) =>
+      set((state) => { state.parsingProgress = progress; }),
     forceReload: () =>
       set((state) => {
         state.reloadTrigger = state.reloadTrigger + 1;
@@ -324,9 +273,7 @@ export const useDocumentStore = create<DocumentState>()(
         state.isDirty = false;
         state.saveStatus = 'idle';
         state.lastSavedAt = null;
-        state.selectedObjects = [];
         state.activePageIndex = 0;
-        state.textObjects = [];
         state.pdfJsDoc = null;
         state.reloadTrigger = state.reloadTrigger + 1;
         state.targetedReloads = {};
@@ -342,49 +289,8 @@ export const useDocumentStore = create<DocumentState>()(
         const { [pageIndex]: _removed, ...rest } = state.targetedReloads;
         state.targetedReloads = rest;
       }),
-    setTextObjects: (objects) =>
-      set((state) => {
-        state.textObjects = objects;
-      }),
-    setImageObjects: (objects: SerializableImageObject[]) =>
-      set((state) => {
-        state.imageObjects = objects;
-      }),
-    setAnnotations: (annotations: AnnotationObject[]) =>
-      set((state) => {
-        state.annotations = annotations;
-      }),
-    addTextObject: (obj) =>
-      set((state) => {
-        state.textObjects.push(obj);
-        state.isDirty = true;
-      }),
-    removeTextObject: (id) =>
-      set((state) => {
-        state.textObjects = state.textObjects.filter((o) => o.id !== id);
-        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
-        state.isDirty = true;
-      }),
-    updateTextObject: (id: string, updates: Partial<SerializableTextObject>) =>
-      set((state) => {
-        const idx = state.textObjects.findIndex((o) => o.id === id);
-        if (idx !== -1) {
-          state.textObjects[idx] = { ...state.textObjects[idx], ...updates } as SerializableTextObject;
-          state.isDirty = true;
-        }
-      }),
-    addToSelection: (obj) =>
-      set((state) => {
-        if (!state.selectedObjects.find((o) => o.id === obj.id)) {
-          state.selectedObjects.push(obj);
-        }
-      }),
-    removeFromSelection: (id) =>
-      set((state) => {
-        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
-      }),
     reset: () =>
-      set(() => ({ ...initialState, annotations: [] })),
+      set(() => ({ ...initialState })),
 
     // ── Page Management ────────────────────────────────────────
     addPage: (afterIndex = -1, size) => {
@@ -419,35 +325,6 @@ export const useDocumentStore = create<DocumentState>()(
         } else if (index === currentActive) {
           state.activePageIndex = Math.min(currentActive, newCount - 1);
         }
-        // #16: Clear selection for objects on the deleted page; re-index all object arrays
-        state.selectedObjects = state.selectedObjects.filter(
-          (o) => o.pageIndex !== index
-        );
-        state.selectedObjects = state.selectedObjects.map((o) => ({
-          ...o,
-          pageIndex: o.pageIndex > index ? o.pageIndex - 1 : o.pageIndex,
-        }));
-        // Re-index textObjects
-        state.textObjects = state.textObjects
-          .filter((o) => o.pageIndex !== index)
-          .map((o) => ({
-            ...o,
-            pageIndex: o.pageIndex > index ? o.pageIndex - 1 : o.pageIndex,
-          }));
-        // Re-index imageObjects
-        state.imageObjects = state.imageObjects
-          .filter((o) => o.pageIndex !== index)
-          .map((o) => ({
-            ...o,
-            pageIndex: o.pageIndex > index ? o.pageIndex - 1 : o.pageIndex,
-          }));
-        // Re-index annotations
-        state.annotations = state.annotations
-          .filter((a) => a.pageIndex !== index)
-          .map((a) => ({
-            ...a,
-            pageIndex: a.pageIndex > index ? a.pageIndex - 1 : a.pageIndex,
-          }));
         // Targeted reload for the affected region (all pages shift)
         state.targetedReloads = {};
         for (let i = 0; i < newCount; i++) {
@@ -461,6 +338,7 @@ export const useDocumentStore = create<DocumentState>()(
       if (!doc) return;
 
       // Push to history before duplicating (#19)
+      const { useHistoryStore } = require('./historyStore');
       useHistoryStore.getState().push({
         label: `Duplicated page ${index + 1}`,
         targetIds: [],
@@ -531,6 +409,7 @@ export const useDocumentStore = create<DocumentState>()(
       // Capture previous crop box for undo before modifying (#20)
       const prevCrop = page.getCropBox?.() ?? null;
       // Push to history before cropping (#20)
+      const { useHistoryStore } = require('./historyStore');
       useHistoryStore.getState().push({
         label: `Cropped page ${index + 1}`,
         targetIds: [],
@@ -547,7 +426,6 @@ export const useDocumentStore = create<DocumentState>()(
         page.setCropBox(pdfX, pdfY, bounds.width, bounds.height);
       }
 
-      // #11: Add partial reload to trigger canvas re-render after direct pdf-lib mutation
       useDocumentStore.getState().addPartialReload(index);
 
       set((state) => {
@@ -563,7 +441,6 @@ export const useDocumentStore = create<DocumentState>()(
       const count: number = await doc.insertPagesFromFile(file, afterIndex);
       if (count === 0) return 0;
 
-      // Issue #8: clear pdfJsDoc to force a full pdf.js reload so canvases
       // render the newly inserted pages (not just incrementing reloadTrigger)
       set((state) => {
         state.isDirty = true;
@@ -572,46 +449,7 @@ export const useDocumentStore = create<DocumentState>()(
       });
       return count;
     },
-    // ── Annotation management (R35-R42) ──────────────────────────
-    addAnnotation: (annotation: AnnotationObject) =>
-      set((state) => {
-        state.annotations.push(annotation);
-        state.isDirty = true;
-      }),
-    removeAnnotation: (id: string) =>
-      set((state) => {
-        state.annotations = state.annotations.filter((a: AnnotationObject) => a.id !== id);
-        state.selectedObjects = state.selectedObjects.filter((o: SelectedObject) => o.id !== id);
-        state.isDirty = true;
-      }),
-    updateAnnotation: (id, updates) =>
-      set((state) => {
-        const idx = state.annotations.findIndex((a) => a.id === id);
-        if (idx !== -1) {
-          state.annotations[idx] = { ...state.annotations[idx], ...updates } as AnnotationObject;
-          state.isDirty = true;
-        }
-      }),
-    // ── Image management (R43-R47) ────────────────────────────────
-    addImageObject: (obj) =>
-      set((state) => {
-        state.imageObjects.push({ ...obj, opacity: obj.opacity ?? 1 });
-        state.isDirty = true;
-      }),
-    removeImageObject: (id) =>
-      set((state) => {
-        state.imageObjects = state.imageObjects.filter((o) => o.id !== id);
-        state.selectedObjects = state.selectedObjects.filter((o) => o.id !== id);
-        state.isDirty = true;
-      }),
-    updateImageObject: (id, updates) =>
-      set((state) => {
-        const idx = state.imageObjects.findIndex((o) => o.id === id);
-        if (idx !== -1) {
-          state.imageObjects[idx] = { ...state.imageObjects[idx], ...updates } as SerializableImageObject;
-          state.isDirty = true;
-        }
-      }),
+
     // ── Form field management (R65) ────────────────────────────────
     updateFormFieldValue: (fieldName, value) =>
       set((state) => {
@@ -625,76 +463,6 @@ export const useDocumentStore = create<DocumentState>()(
     setPendingSignature: (sig) =>
       set((state) => {
         state.pendingSignature = sig;
-      }),
-    copySelected: () =>
-      set((state) => {
-        const selected = state.selectedObjects.filter((o) => o.type === 'text');
-        state.clipboard = selected
-          .map((sel) => state.textObjects.find((t) => t.id === sel.id))
-          .filter(Boolean) as SerializableTextObject[];
-
-        // Also copy to system clipboard for OS-level paste support (R85)
-        const textToCopy = selected
-          .map((o) => {
-            const textObj = state.textObjects.find((t) => t.id === o.id);
-            return textObj?.content ?? '';
-          })
-          .filter(Boolean)
-          .join('\n');
-        if (textToCopy && typeof navigator !== 'undefined' && navigator.clipboard) {
-          navigator.clipboard.writeText(textToCopy).catch(() => {});
-        }
-      }),
-    pasteClipboard: () =>
-      set((state) => {
-        if (state.clipboard.length === 0) return;
-        const newObjs: SerializableTextObject[] = state.clipboard.map((obj) => ({
-          ...obj,
-          id: `${obj.id}-copy-${Date.now()}`,
-          x: obj.x + 20,
-          y: obj.y + 20,
-          objectRef: 'new',
-        }));
-        newObjs.forEach((obj) => state.textObjects.push(obj));
-        state.isDirty = true;
-      }),
-    duplicateSelected: () =>
-      set((state) => {
-        const selected = state.selectedObjects.filter((o) => o.type === 'text');
-        const toDuplicate = selected
-          .map((sel) => state.textObjects.find((t) => t.id === sel.id))
-          .filter(Boolean) as SerializableTextObject[];
-        const newObjs: SerializableTextObject[] = toDuplicate.map((obj) => ({
-          ...obj,
-          id: `${obj.id}-dup-${Date.now()}`,
-          x: obj.x + 20,
-          y: obj.y + 20,
-          objectRef: 'new',
-        }));
-        newObjs.forEach((obj) => {
-          state.textObjects.push(obj);
-          state.selectedObjects.push({ id: obj.id, type: 'text', pageIndex: obj.pageIndex });
-        });
-        state.isDirty = true;
-      }),
-    // ── Search state (B3) ──────────────────────────────────────────
-    setSearchQuery: (query) =>
-      set((state) => {
-        state.searchQuery = query;
-      }),
-    setSearchActiveMatches: (matches) =>
-      set((state) => {
-        state.searchActiveMatches = matches;
-      }),
-    setSearchCurrentMatchIndex: (index) =>
-      set((state) => {
-        state.searchCurrentMatchIndex = index;
-      }),
-    clearSearch: () =>
-      set((state) => {
-        state.searchQuery = '';
-        state.searchActiveMatches = [];
-        state.searchCurrentMatchIndex = 0;
       }),
   }))
 );

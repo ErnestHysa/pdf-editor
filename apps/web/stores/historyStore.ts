@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useDocumentStore } from './documentStore';
+import { useObjectsStore } from './objectsStore';
 
 /**
  * Action types for serializable history.
@@ -97,92 +98,90 @@ export interface HistorySnapshot {
 /** Reconstruct executeUndo from action data + live store state */
 function buildExecuteUndo(data: HistoryActionData): () => void {
   return () => {
-    const store = useDocumentStore.getState();
+    const docStore = useDocumentStore.getState();
+    const objStore = useObjectsStore.getState();
     switch (data.type) {
       case 'text-edit':
         if (data.targetIds[0] && data.previousContent !== undefined) {
-          store.updateTextObject(data.targetIds[0], { content: data.previousContent });
+          objStore.updateTextObject(data.targetIds[0], { content: data.previousContent });
         }
         break;
       case 'text-add':
-        data.targetIds.forEach((id) => store.removeTextObject(id));
+        data.targetIds.forEach((id) => objStore.removeTextObject(id));
         break;
       case 'text-delete':
         if (data.objectData) {
-          store.addTextObject(data.objectData as unknown as Parameters<typeof store.addTextObject>[0]);
+          objStore.addTextObject(data.objectData as Parameters<typeof objStore.addTextObject>[0]);
         }
         break;
       case 'annotation-add':
-        data.targetIds.forEach((id) => store.removeAnnotation(id));
+        data.targetIds.forEach((id) => objStore.removeAnnotation(id));
         break;
       case 'annotation-delete':
         if (data.objectData) {
-          store.addAnnotation(data.objectData as unknown as Parameters<typeof store.addAnnotation>[0]);
+          objStore.addAnnotation(data.objectData as Parameters<typeof objStore.addAnnotation>[0]);
         }
         break;
-case 'annotation-update':
+      case 'annotation-update':
         (data.targetIds as string[]).forEach((id) => {
           if (data.objectData) {
             const prev = (data.objectData as Record<string, unknown>)['previous'] as Record<string, unknown>;
-            if (prev) store.updateAnnotation(id, prev as Parameters<typeof store.updateAnnotation>[1]);
+            if (prev) objStore.updateAnnotation(id, prev as Parameters<typeof objStore.updateAnnotation>[1]);
           }
         });
         break;
       case 'image-add':
-        (data.targetIds as string[]).forEach((id) => store.removeImageObject(id));
+        (data.targetIds as string[]).forEach((id) => objStore.removeImageObject(id));
         break;
       case 'image-delete':
         if (data.objectData) {
-          store.addImageObject(data.objectData as unknown as Parameters<typeof store.addImageObject>[0]);
+          objStore.addImageObject(data.objectData as Parameters<typeof objStore.addImageObject>[0]);
         }
         break;
       case 'image-update':
         (data.targetIds as string[]).forEach((id) => {
-          const img = store.imageObjects.find((i) => i.id === id);
+          const img = objStore.imageObjects.find((i) => i.id === id);
           if (img && data.objectData) {
             const prev = (data.objectData as Record<string, unknown>)['previous'] as Partial<typeof img>;
-            if (prev) store.updateImageObject(id, prev);
+            if (prev) objStore.updateImageObject(id, prev);
           }
         });
         break;
       case 'page-delete':
         if (data.objectData) {
           const obj = data.objectData as Record<string, unknown>;
-          store.addPage(data.pageIndex ?? -1, obj['size'] as { width: number; height: number } | undefined);
+          docStore.addPage(data.pageIndex ?? -1, obj['size'] as { width: number; height: number } | undefined);
         }
         break;
       case 'page-duplicate':
         // Undo duplicate = delete the duplicated page
         if (data.pageIndex !== undefined) {
-          store.deletePage(data.pageIndex + 1);
+          docStore.deletePage(data.pageIndex + 1);
         }
         break;
       case 'page-reorder':
         if (data.fromIndex !== undefined && data.toIndex !== undefined) {
-          store.reorderPages(data.toIndex, data.fromIndex);
+          docStore.reorderPages(data.toIndex, data.fromIndex);
         }
         break;
       case 'page-rotate':
         if (data.pageIndex !== undefined && data.rotation !== undefined) {
-          // Undo: reverse the rotation. A +90 (right) rotation undoes to 'left',
-          // a -90 (left) rotation undoes to 'right'.
-          store.rotatePage(data.pageIndex, data.rotation === 90 ? 'left' : 'right');
+          docStore.rotatePage(data.pageIndex, data.rotation === 90 ? 'left' : 'right');
         }
         break;
       case 'page-crop':
         if (data.pageIndex !== undefined && data.previousCropBox) {
-          store.cropPage(data.pageIndex, data.previousCropBox);
+          docStore.cropPage(data.pageIndex, data.previousCropBox);
         }
         break;
       case 'page-add':
-        // Undo add = delete the page that was added at pageIndex
         if (data.pageIndex !== undefined) {
-          store.deletePage(data.pageIndex);
+          docStore.deletePage(data.pageIndex);
         }
         break;
       case 'form-field-update':
         if (data.targetIds[0] && data.previousValue !== undefined) {
-          store.updateFormFieldValue(data.targetIds[0], data.previousValue);
+          docStore.updateFormFieldValue(data.targetIds[0], data.previousValue);
         }
         break;
       default:
@@ -194,103 +193,97 @@ case 'annotation-update':
 /** Reconstruct executeRedo from action data + live store state */
 function buildExecuteRedo(data: HistoryActionData): () => void {
   return () => {
-    const store = useDocumentStore.getState();
+    const docStore = useDocumentStore.getState();
+    const objStore = useObjectsStore.getState();
     switch (data.type) {
       case 'text-edit':
         if (data.targetIds[0] && data.newContent !== undefined) {
-          store.updateTextObject(data.targetIds[0], { content: data.newContent });
+          objStore.updateTextObject(data.targetIds[0], { content: data.newContent });
         }
         break;
       case 'text-add':
         if (data.objectData) {
-          store.addTextObject(data.objectData as unknown as Parameters<typeof store.addTextObject>[0]);
+          objStore.addTextObject(data.objectData as Parameters<typeof objStore.addTextObject>[0]);
         }
         break;
       case 'text-delete':
-        data.targetIds.forEach((id) => store.removeTextObject(id));
+        data.targetIds.forEach((id) => objStore.removeTextObject(id));
         break;
       case 'annotation-add':
         if (data.objectData) {
-          store.addAnnotation(data.objectData as unknown as Parameters<typeof store.addAnnotation>[0]);
+          objStore.addAnnotation(data.objectData as Parameters<typeof objStore.addAnnotation>[0]);
         }
         break;
       case 'annotation-delete':
-        data.targetIds.forEach((id) => store.removeAnnotation(id));
+        data.targetIds.forEach((id) => objStore.removeAnnotation(id));
         break;
       case 'annotation-update':
         data.targetIds.forEach((id) => {
           if (data.objectData) {
             const obj = data.objectData as Record<string, unknown>;
             const next = obj['next'] as Record<string, unknown>;
-            if (next) store.updateAnnotation(id, next as Parameters<typeof store.updateAnnotation>[1]);
+            if (next) objStore.updateAnnotation(id, next as Parameters<typeof objStore.updateAnnotation>[1]);
           }
         });
         break;
       case 'image-add':
         if (data.objectData) {
-          store.addImageObject(data.objectData as Parameters<typeof store.addImageObject>[0]);
+          objStore.addImageObject(data.objectData as Parameters<typeof objStore.addImageObject>[0]);
         }
         break;
       case 'image-delete':
-        data.targetIds.forEach((id) => store.removeImageObject(id));
+        data.targetIds.forEach((id) => objStore.removeImageObject(id));
         break;
       case 'image-update':
         data.targetIds.forEach((id) => {
           if (data.objectData) {
             const obj = data.objectData as Record<string, unknown>;
             const next = obj['next'] as Partial<Record<string, unknown>>;
-            if (next) store.updateImageObject(id, next as Parameters<typeof store.updateImageObject>[1]);
+            if (next) objStore.updateImageObject(id, next as Parameters<typeof objStore.updateImageObject>[1]);
           }
         });
         break;
       case 'page-add':
-        // Bounds check: verify the target pageIndex is within valid range before executing.
-        // If pages were reordered or deleted since this action was recorded, pageIndex
-        // may be stale. Guard to prevent operating on an invalid index. (#24)
         if (data.pageIndex !== undefined) {
-          const doc = useDocumentStore.getState().pdfDocument;
+          const doc = docStore.pdfDocument;
           if (doc && data.pageIndex >= 0 && data.pageIndex < doc.getPageCount()) {
-            store.addPage(data.pageIndex ?? -1);
+            docStore.addPage(data.pageIndex ?? -1);
           }
         }
         break;
       case 'page-delete':
         if (data.pageIndex !== undefined) {
-          store.deletePage(data.pageIndex);
+          docStore.deletePage(data.pageIndex);
         }
         break;
       case 'page-duplicate':
-        // Bounds check: verify pageIndex+1 is within valid range before executing.
-        // The duplicate is inserted after pageIndex, so we need pageIndex+1 to be valid. (#24)
         if (data.pageIndex !== undefined) {
-          const doc = useDocumentStore.getState().pdfDocument;
+          const doc = docStore.pdfDocument;
           if (doc && data.pageIndex >= 0 && data.pageIndex + 1 < doc.getPageCount()) {
-            store.duplicatePage(data.pageIndex);
+            docStore.duplicatePage(data.pageIndex);
           }
         }
         break;
       case 'page-reorder':
         if (data.fromIndex !== undefined && data.toIndex !== undefined) {
-          store.reorderPages(data.fromIndex, data.toIndex);
+          docStore.reorderPages(data.fromIndex, data.toIndex);
         }
         break;
       case 'page-rotate':
         if (data.pageIndex !== undefined && data.rotation !== undefined) {
-          // Redo: re-apply the rotation. A +90 (right) rotation redoes to 'right',
-          // a -90 (left) rotation redoes to 'left'. Fixes issue #13.
-          store.rotatePage(data.pageIndex, data.rotation === 90 ? 'right' : 'left');
+          docStore.rotatePage(data.pageIndex, data.rotation === 90 ? 'right' : 'left');
         }
         break;
       case 'page-crop':
         if (data.pageIndex !== undefined && data.objectData) {
           const obj = data.objectData as Record<string, unknown>;
           const current = obj['current'] as { x: number; y: number; width: number; height: number };
-          if (current) store.cropPage(data.pageIndex, current);
+          if (current) docStore.cropPage(data.pageIndex, current);
         }
         break;
       case 'form-field-update':
         if (data.targetIds[0] && data.newValue !== undefined) {
-          store.updateFormFieldValue(data.targetIds[0], data.newValue);
+          docStore.updateFormFieldValue(data.targetIds[0], data.newValue);
         }
         break;
       default:
@@ -300,11 +293,11 @@ function buildExecuteRedo(data: HistoryActionData): () => void {
 }
 
 function validateFromStore(targetIds: string[], type: HistoryActionType): boolean {
-  const store = useDocumentStore.getState();
+  const objStore = useObjectsStore.getState();
   return targetIds.every((id) => {
-    const inText = store.textObjects.some((t) => t.id === id);
-    const inImage = store.imageObjects.some((img) => img.id === id);
-    const inAnnotation = store.annotations.some((a) => a.id === id);
+    const inText = objStore.textObjects.some((t) => t.id === id);
+    const inImage = objStore.imageObjects.some((img) => img.id === id);
+    const inAnnotation = objStore.annotations.some((a) => a.id === id);
     return inText || inImage || inAnnotation;
   });
 }

@@ -1,9 +1,11 @@
 'use client';
 import { useCallback, useRef } from 'react';
 import { useDocumentStore } from '@/stores/documentStore';
+import { useSelectionStore } from '@/stores/selectionStore';
+import { useObjectsStore } from '@/stores/objectsStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useHistoryStore } from '@/stores/historyStore';
-import { glyphPreservingEdit } from '@/lib/pdf/glyphEditor';
+import { glyphPreservingEdit } from '@pagecraft/pdf-engine';
 
 interface TextEditState {
   objectId: string | null;
@@ -12,7 +14,8 @@ interface TextEditState {
 }
 
 export function useTextEditor() {
-  const { pdfDocument, selectedObjects } = useDocumentStore();
+  const { pdfDocument } = useDocumentStore();
+  const { selectedObjects } = useSelectionStore();
   const { push } = useHistoryStore();
   const editStateRef = useRef<TextEditState | null>(null);
 
@@ -44,7 +47,7 @@ export function useTextEditor() {
     // Update Zustand overlay — the primary editing mechanism.
     // The engine's texts array may not be populated from PdfParser,
     // so we use the Zustand textObjects path.
-    const store = useDocumentStore.getState();
+    const store = useObjectsStore.getState();
     if (objectId) {
       const existing = store.textObjects.find(t => t.id === objectId);
       if (existing) {
@@ -54,7 +57,7 @@ export function useTextEditor() {
         const page = pdfDocument.getPage(pageIndex);
         const obj = page?.getObjects().texts.find((t: any) => t.getId() === objectId);
         if (obj) {
-          const success = glyphPreservingEdit(pageIndex, obj.getObjectRef(), originalContent, newContent);
+          const success = glyphPreservingEdit(pageIndex, obj.getObjectRef(), originalContent, newContent, pdfDocument);
           if (!success) {
             useUIStore.getState().setToast('Text edit failed — glyphs could not be preserved');
             return false;
@@ -64,7 +67,7 @@ export function useTextEditor() {
         }
       }
     }
-    store.setDirty(true);
+    useDocumentStore.getState().setDirty(true);
     return true;
   }, [pdfDocument, push]);
 

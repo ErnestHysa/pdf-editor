@@ -22,6 +22,9 @@ export interface ToolOptions {
   brushSize?: number;
   // Sticky note
   stickyColor?: string;
+  // Stamp
+  stampLabel?: string;
+  stampBackgroundColor?: string;
 }
 
 interface ToolState {
@@ -49,6 +52,8 @@ const defaultOptions: ToolOptions = {
   highlightColor: '#C97B3E',
   brushSize: 2,
   stickyColor: '#FFEB3B',
+  stampLabel: 'APPROVED',
+  stampBackgroundColor: '#4CAF7D',
 };
 
 export const useToolStore = create<ToolState>()(

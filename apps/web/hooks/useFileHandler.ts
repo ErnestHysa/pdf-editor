@@ -2,6 +2,7 @@
 import { useCallback, useRef } from 'react';
 import { PdfEngine } from '@pagecraft/pdf-engine';
 import { useDocumentStore } from '@/stores/documentStore';
+import { useObjectsStore } from '@/stores/objectsStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { saveRecentFile } from '@/hooks/useRecentFiles';
@@ -71,14 +72,15 @@ export function useFileHandler() {
       // Restore overlay state (Zustand-only objects) from IndexedDB
       const overlay = await loadOverlayState(docId);
       if (overlay) {
-        const { setTextObjects, setImageObjects, setAnnotations, updateFormFieldValue, setPendingSignature } = useDocumentStore.getState();
-        if (overlay.textObjects.length) setTextObjects(overlay.textObjects);
-        if (overlay.imageObjects.length) setImageObjects(overlay.imageObjects);
-        if (overlay.annotations.length) setAnnotations(overlay.annotations);
+        const docStore = useDocumentStore.getState();
+        const objectsStore = useObjectsStore.getState();
+        if (overlay.textObjects.length) objectsStore.setTextObjects(overlay.textObjects);
+        if (overlay.imageObjects.length) objectsStore.setImageObjects(overlay.imageObjects);
+        if (overlay.annotations.length) objectsStore.setAnnotations(overlay.annotations);
         for (const [field, value] of Object.entries(overlay.formFieldValues)) {
-          updateFormFieldValue(field, value);
+          docStore.updateFormFieldValue(field, value);
         }
-        if (overlay.pendingSignature) setPendingSignature(overlay.pendingSignature);
+        if (overlay.pendingSignature) docStore.setPendingSignature(overlay.pendingSignature);
         console.debug("[FileHandler] overlay restored for:", docId);
       }
 

@@ -32,6 +32,7 @@ export const TOOLS = [
   { id: 'draw', label: 'Freehand Draw', shortcut: 'D', icon: 'Pencil' },
   { id: 'image', label: 'Image', shortcut: 'I', icon: 'Image' },
   { id: 'signature', label: 'Signature', shortcut: 'G', icon: 'Pen' },
+  { id: 'stamp', label: 'Stamp', shortcut: 'P', icon: 'Stamp' },
 ] as const;
 
 export type ToolId = typeof TOOLS[number]['id'];

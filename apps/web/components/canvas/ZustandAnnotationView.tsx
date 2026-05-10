@@ -97,7 +97,7 @@ export function ZustandAnnotationView({
   }
 
   if (annotation.type === 'comment') {
-    // Issue #7: Build comment number map once per render via useMemo (was O(n²) per render)
+    
     const commentIndexMap = useMemo(() => {
       const map = new Map<string, number>();
       let num = 0;
@@ -244,6 +244,37 @@ export function ZustandAnnotationView({
           markerEnd={isArrow ? `url(#ann-arrow-${annotation.id})` : undefined}
         />
       </svg>
+    );
+  }
+
+  if (annotation.type === 'stamp') {
+    const bgColor = (annotation as any).backgroundColor ?? '#4CAF7D';
+    const label = (annotation as any).label ?? 'STAMP';
+    // Derive readable text color from background luminance
+    const textColor = bgColor.startsWith('#')
+      ? (() => {
+          const r = parseInt(bgColor.slice(1, 3), 16);
+          const g = parseInt(bgColor.slice(3, 5), 16);
+          const b = parseInt(bgColor.slice(5, 7), 16);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          return luminance > 0.6 ? '#000000' : '#ffffff';
+        })()
+      : '#ffffff';
+    return (
+      <div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none rounded"
+        style={{
+          backgroundColor: bgColor,
+          opacity: annotation.opacity ?? 1,
+        }}
+      >
+        <span
+          className="text-xs font-bold uppercase tracking-wider select-none"
+          style={{ color: textColor, fontSize: Math.min(annotation.width, annotation.height) * 0.25 }}
+        >
+          {label}
+        </span>
+      </div>
     );
   }
 

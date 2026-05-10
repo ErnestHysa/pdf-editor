@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { useDocumentStore, SerializableTextObject } from '@/stores/documentStore';
+import { useDocumentStore } from '@/stores/documentStore';
+import { useObjectsStore } from '@/stores/objectsStore';
+import { useSearchStore } from '@/stores/searchStore';
+import type { SerializableTextObject } from '@/stores/documentStore';
 import { useSearch } from '@/hooks/useSearch';
 import { cn } from '@/lib/utils';
 
@@ -24,11 +27,13 @@ export function SearchOverlay() {
   const inputRef = useRef<HTMLInputElement>(null);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const {
-    textObjects, setActivePage,
-    searchActiveMatches, searchCurrentMatchIndex,
-    setSearchActiveMatches, setSearchCurrentMatchIndex, clearSearch,
-  } = useDocumentStore();
+  const textObjects = useObjectsStore((s) => s.textObjects);
+  const searchActiveMatches = useSearchStore((s) => s.searchActiveMatches);
+  const searchCurrentMatchIndex = useSearchStore((s) => s.searchCurrentMatchIndex);
+  const setSearchActiveMatches = useSearchStore((s) => s.setSearchActiveMatches);
+  const setSearchCurrentMatchIndex = useSearchStore((s) => s.setSearchCurrentMatchIndex);
+  const clearSearch = useSearchStore((s) => s.clearSearch);
+  const setActivePage = useDocumentStore((s) => s.setActivePage);
 
   const { executeSearch, clearSearch: clearSearchHandler, nextMatch, prevMatch } = useSearch();
 

@@ -1,6 +1,6 @@
-"use client";
+// usePdfParser.ts — library code, no "use client"
 import * as pdfjsLib from "pdfjs-dist";
-import type { TextObject, BoundingBox, TextStyle } from "@pagecraft/pdf-engine";
+import type { BoundingBox, TextStyle } from './types';
 
 interface ParsedTextObject {
   content: string;
@@ -126,7 +126,7 @@ export class PdfParser {
    * parseAllPages — parses all PDF pages using requestIdleCallback to avoid
    * blocking the main thread. Processes pages in chunks of 10, yielding to the
    * browser between chunks so large PDFs remain responsive.
-   * @param onProgress Called with (currentPage, totalPages) as pages are parsed.
+   * @param onProgress Optional callback (currentPage, totalPages) called after each chunk.
    */
   async parseAllPages(onProgress?: (current: number, total: number) => void): Promise<Map<number, ParsedTextObject[]>> {
     const pageCount = this.pdfDoc.numPages;

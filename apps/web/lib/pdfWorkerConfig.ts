@@ -4,6 +4,7 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy';
 
 if (typeof window !== 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (pdfjsLib.GlobalWorkerOptions as any).workerSrc = '/pdf.worker.min.js';
+  // pdfjs-dist's GlobalWorkerOptions.workerSrc is a static setter that accepts a string.
+  // The explicit cast is safe here since pdfjs-dist v3.x guarantees this API shape.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 }

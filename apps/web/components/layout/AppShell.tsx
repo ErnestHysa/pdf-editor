@@ -2,6 +2,7 @@
 import { useEffect, useState, DragEvent } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
+import { useSelectionStore } from '@/stores/selectionStore';
 import { TopBar } from './TopBar';
 import { LeftSidebar } from './LeftSidebar';
 import { CanvasArea } from '@/components/canvas/CanvasArea';
@@ -75,7 +76,7 @@ export function AppShell({ children }: AppShellProps) {
       }
       if (e.key === 'Escape') {
         useUIStore.getState().setCommandPaletteOpen(false);
-        useDocumentStore.getState().clearSelection();
+        useSelectionStore.getState().clearSelection();
       }
     };
     window.addEventListener('keydown', handler);

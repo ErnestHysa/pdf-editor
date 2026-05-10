@@ -57,7 +57,7 @@ export function ToolFAB() {
                 key={tool.id}
                 onClick={() => handleToolSelect(tool.id as typeof activeTool)}
                 className={cn(
-                  'tool-fab absolute w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150',
+                  'tool-fab absolute w-11 h-11 rounded-full flex items-center justify-center transition-all duration-150',
                   activeTool === tool.id
                     ? 'bg-accent text-white'
                     : 'bg-bg-elevated border border-border text-text-secondary hover:border-accent hover:text-accent'

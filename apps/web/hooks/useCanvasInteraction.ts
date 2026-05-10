@@ -2,6 +2,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useDocumentStore } from '@/stores/documentStore';
+import { useSelectionStore } from '@/stores/selectionStore';
+import { useObjectsStore } from '@/stores/objectsStore';
 import { useToolStore } from '@/stores/toolStore';
 import type { BoundingBox } from '@pagecraft/pdf-engine';
 
@@ -16,7 +18,9 @@ interface DragState {
 
 export function useCanvasInteraction() {
   const { zoom, panOffset, setPanOffset } = useUIStore();
-  const { selectObject, updateTextObject, textObjects } = useDocumentStore();
+  const textObjects = useObjectsStore((s) => s.textObjects);
+  const updateTextObject = useObjectsStore((s) => s.updateTextObject);
+  const selectObject = useSelectionStore((s) => s.selectObject);
   const { activeTool } = useToolStore();
 
   const dragState = useRef<DragState>({ type: null, startX: 0, startY: 0 });
