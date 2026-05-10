@@ -55,10 +55,10 @@ export const ObjectOverlays = memo(function ObjectOverlays({
   isObjectVisible,
   getPointerPosition,
 }: ObjectOverlaysProps) {
-  const textObjects = useObjectsStore(useCallback((s) =>
-    s.textObjects.filter(o => o.pageIndex === pageIndex), [pageIndex]));
-  const imageObjects = useObjectsStore(useCallback((s) =>
-    s.imageObjects.filter(o => o.pageIndex === pageIndex), [pageIndex]));
+  const textObjects = useObjectsStore((s) =>
+    s.textObjects.filter(o => o.pageIndex === pageIndex));
+  const imageObjects = useObjectsStore((s) =>
+    s.imageObjects.filter(o => o.pageIndex === pageIndex));
   const { toolOptions } = useToolStore();
   const selectedObjects = useSelectionStore((s) => s.selectedObjects);
   const updateImageObject = useObjectsStore((s) => s.updateImageObject);
