@@ -68,14 +68,24 @@ export function useFileHandler() {
       setZoom(1.0);
 
       // Restore history from IndexedDB if available (using stable docId hash)
-      const snapshot = await loadHistory(docId);
-      if (snapshot) {
-        useHistoryStore.getState().hydrateHistory(snapshot);
-        console.debug("[FileHandler] history restored for:", docId);
+      let snapshot = null;
+      try {
+        snapshot = await loadHistory(docId);
+        if (snapshot) {
+          useHistoryStore.getState().hydrateHistory(snapshot);
+          console.debug("[FileHandler] history restored for:", docId);
+        }
+      } catch (err) {
+        console.warn("[FileHandler] could not load history:", err);
       }
 
       // Restore overlay state (Zustand-only objects) from IndexedDB
-      const overlay = await loadOverlayState(docId);
+      let overlay = null;
+      try {
+        overlay = await loadOverlayState(docId);
+      } catch (err) {
+        console.warn("[FileHandler] could not load overlay state:", err);
+      }
       if (overlay) {
         const docStore = useDocumentStore.getState();
         const objectsStore = useObjectsStore.getState();

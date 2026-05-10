@@ -47,12 +47,16 @@ export function FormFieldPanel() {
           };
           const fieldType = typeMap[a.fieldType] ?? "text";
 
-          // For checkboxes and radios, determine if checked
-          let fieldValue: string | boolean = a.fieldValue ?? "";
+          // Use the stored value from formFieldValues if available (user may have edited it),
+          // otherwise fall back to the annotation's original fieldValue
+          const storedValue = (a.fieldName ?? "") in formFieldValues
+            ? formFieldValues[a.fieldName ?? ""]
+            : a.fieldValue ?? "";
+          let fieldValue: string | boolean = storedValue;
           if (fieldType === "checkbox") {
-            fieldValue = a.fieldValue === true || a.fieldValue === "Yes" || a.fieldValue === a.exportValues?.[0];
+            fieldValue = storedValue === true || storedValue === "Yes" || storedValue === a.exportValues?.[0];
           } else if (fieldType === "radio") {
-            fieldValue = a.fieldValue;
+            fieldValue = storedValue;
           }
 
           fields.push({
@@ -81,7 +85,7 @@ export function FormFieldPanel() {
 
   useEffect(() => {
     loadFormFields();
-  }, [loadFormFields]);
+  }, [loadFormFields, formFieldValues]);
 
   const handleFieldChange = useCallback((fieldName: string, newValue: string | boolean) => {
     updateFormFieldValue(fieldName, newValue);

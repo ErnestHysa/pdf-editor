@@ -12,6 +12,7 @@ import { PdfPageCanvas } from './PdfPageCanvas';
 import { DrawingOverlay } from './DrawingOverlay';
 import { ObjectOverlays } from './ObjectOverlays';
 import { ShapePreviewOverlay } from './ShapePreviewOverlay';
+import { FormFieldOverlay } from './FormFieldOverlay';
 import { cn } from '@/lib/utils';
 import type { SerializableTextObject } from '@/stores/documentStore';
 
@@ -509,6 +510,13 @@ export const PageCanvas = memo(function PageCanvas({
         shapeToolRef={shapeToolRef.current}
         isObjectVisible={isObjectVisible}
         getPointerPosition={getPointerPosition}
+      />
+
+      {/* Layer 5: Form field interactive overlays (AcroForm widget inputs) */}
+      <FormFieldOverlay
+        pageIndex={pageIndex}
+        pageWidth={pageWidth}
+        pageHeight={pageHeight}
       />
     </div>
   );

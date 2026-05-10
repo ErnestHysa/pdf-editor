@@ -10,7 +10,7 @@ import { exportPdfWithChanges } from "./usePdfExporter";
 import { AUTOSAVE_DEBOUNCE_MS, AUTOSAVE_JITTER_MS } from "@/lib/constants";
 
 const DB_NAME = "pagecraft";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const STORE_NAME = "documents";
 const HISTORY_STORE_NAME = "history";
 const OVERLAY_STORE_NAME = "overlay";

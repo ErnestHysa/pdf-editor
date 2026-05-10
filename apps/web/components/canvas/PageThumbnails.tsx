@@ -38,6 +38,8 @@ interface ThumbnailSlotProps {
 
 function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensions }: ThumbnailSlotProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rendered = useRef(false);
+  const pendingRender = useRef<(() => void) | null>(null);
   const { width, height } = getPageDimensions(pageIndex);
   const aspectRatio = width / height;
 
@@ -87,12 +89,20 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
 
   useEffect(() => {
     if (!canvasRef.current || !pdfJsDoc) return;
-    let cancelled = false;
+    if (rendered.current) return;
 
-    pdfJsDoc.getPage(pageIndex + 1).then((pdfPage: any) => {
-      if (cancelled) return;
-      const canvas = canvasRef.current!;
-      const scale = 80 / width; // 80px wide thumbnail
+    let cancelled = false;
+    const doRender = async () => {
+      // Small delay to let main canvas rendering start first and avoid
+      // pdfjs-dist "Cannot use the same canvas during multiple render operations"
+      await new Promise((r) => setTimeout(r, 50));
+      if (cancelled || !canvasRef.current) return;
+
+      const pdfPage = await pdfJsDoc.getPage(pageIndex + 1);
+      if (cancelled || !canvasRef.current) return;
+
+      const canvas = canvasRef.current;
+      const scale = 80 / width;
       canvas.width = 80;
       canvas.height = height * scale;
 
@@ -107,14 +117,22 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
         viewport,
       };
 
-      pdfPage.render(renderContext as any).promise.then(() => {
-        if (!cancelled) console.log(`[Thumbnail] page ${pageIndex + 1} rendered`);
-      }).catch((err: Error) => {
-        console.error(`[Thumbnail] page ${pageIndex + 1} error:`, err.message);
-      });
-    });
+      try {
+        await pdfPage.render(renderContext as any).promise;
+        if (!cancelled) {
+          rendered.current = true;
+          console.log(`[Thumbnail] page ${pageIndex + 1} rendered`);
+        }
+      } catch (err) {
+        if (!cancelled) console.error(`[Thumbnail] page ${pageIndex + 1} error:`, (err as Error).message);
+      }
+    };
 
-    return () => { cancelled = true; };
+    doRender().catch(console.error);
+
+    return () => {
+      cancelled = true;
+    };
   }, [pdfJsDoc, pageIndex, width, height]);
 
   return (
