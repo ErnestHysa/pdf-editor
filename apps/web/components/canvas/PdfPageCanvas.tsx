@@ -19,19 +19,18 @@ export const PdfPageCanvas = memo(function PdfPageCanvas({
 }: PdfPageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pdfJsDoc = useDocumentStore((s) => s.pdfJsDoc);
-  const targetedReloads = useDocumentStore((s) => s.targetedReloads);
+  const pageReloadTimestamp = useDocumentStore((s) => s.targetedReloads[pageIndex]);
   const clearPartialReload = useDocumentStore((s) => s.clearPartialReload);
   const [pageReloadKey, setPageReloadKey] = useState(0);
 
   // Re-render this specific page when targetedReloads[pageIndex] changes
   useEffect(() => {
-    const ts = targetedReloads[pageIndex];
-    if (ts) {
+    if (pageReloadTimestamp) {
       setPageReloadKey((k) => k + 1);
       // Clear the entry to avoid stale entries accumulating
       clearPartialReload(pageIndex);
     }
-  }, [targetedReloads, pageIndex, clearPartialReload]);
+  }, [pageReloadTimestamp, pageIndex, clearPartialReload]);
 
   useEffect(() => {
     if (!canvasRef.current || !pdfJsDoc) return;

@@ -1,5 +1,5 @@
 'use client';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useToolStore } from '@/stores/toolStore';
 import { useObjectsStore } from '@/stores/objectsStore';
@@ -55,11 +55,20 @@ export const ObjectOverlays = memo(function ObjectOverlays({
   isObjectVisible,
   getPointerPosition,
 }: ObjectOverlaysProps) {
-  const textObjects = useObjectsStore(
-    (s) => s.textObjects.filter(o => o.pageIndex === pageIndex)
+  const allTextObjects = useObjectsStore((s) => s.textObjects);
+  const allImageObjects = useObjectsStore((s) => s.imageObjects);
+  const allAnnotations = useObjectsStore((s) => s.annotations);
+  const textObjects = useMemo(
+    () => allTextObjects.filter(o => o.pageIndex === pageIndex),
+    [allTextObjects, pageIndex]
   );
-  const imageObjects = useObjectsStore(
-    (s) => s.imageObjects.filter(o => o.pageIndex === pageIndex)
+  const imageObjects = useMemo(
+    () => allImageObjects.filter(o => o.pageIndex === pageIndex),
+    [allImageObjects, pageIndex]
+  );
+  const annotations = useMemo(
+    () => allAnnotations.filter(a => a.pageIndex === pageIndex),
+    [allAnnotations, pageIndex]
   );
   const { toolOptions } = useToolStore();
   const selectedObjects = useSelectionStore((s) => s.selectedObjects);

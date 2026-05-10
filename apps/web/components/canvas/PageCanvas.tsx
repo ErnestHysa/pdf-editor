@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useCallback, useState, memo } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo, memo } from 'react';
 import { Page } from '@pagecraft/pdf-engine';
 import { useDocumentStore } from '@/stores/documentStore';
 import { useObjectsStore } from '@/stores/objectsStore';
@@ -57,14 +57,20 @@ export const PageCanvas = memo(function PageCanvas({
 }: PageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const textObjects = useObjectsStore(
-    (s) => s.textObjects.filter(o => o.pageIndex === pageIndex)
+  const allTextObjects = useObjectsStore((s) => s.textObjects);
+  const allImageObjects = useObjectsStore((s) => s.imageObjects);
+  const allAnnotations = useObjectsStore((s) => s.annotations);
+  const textObjects = useMemo(
+    () => allTextObjects.filter(o => o.pageIndex === pageIndex),
+    [allTextObjects, pageIndex]
   );
-  const imageObjects = useObjectsStore(
-    (s) => s.imageObjects.filter(o => o.pageIndex === pageIndex)
+  const imageObjects = useMemo(
+    () => allImageObjects.filter(o => o.pageIndex === pageIndex),
+    [allImageObjects, pageIndex]
   );
-  const annotations = useObjectsStore(
-    (s) => s.annotations.filter(a => a.pageIndex === pageIndex)
+  const annotations = useMemo(
+    () => allAnnotations.filter(a => a.pageIndex === pageIndex),
+    [allAnnotations, pageIndex]
   );
   const { activeTool, toolOptions } = useToolStore();
   const selectedObjects = useSelectionStore((s) => s.selectedObjects);
