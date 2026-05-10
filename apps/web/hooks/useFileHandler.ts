@@ -127,3 +127,26 @@ export function useFileHandler() {
     MAX_FILE_SIZE,
   };
 }
+
+// ── Programmatic PDF loading ─────────────────────────────────────────
+// Exposed for external callers (e.g. ?pdf= URL param or window.loadPdf)
+let _programmaticHandler: ((file: File) => Promise<void>) | null = null;
+export function __setProgrammaticHandler(fn: (file: File) => Promise<void>) {
+  _programmaticHandler = fn;
+}
+export async function __loadPdfFromUrl(url: string): Promise<void> {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Failed to fetch PDF: ${resp.status}`);
+  const blob = await resp.blob();
+  const fileName = decodeURIComponent(url.split('/').pop() ?? 'document.pdf');
+  const file = new File([blob], fileName, { type: 'application/pdf' });
+  if (_programmaticHandler) {
+    await _programmaticHandler(file);
+  } else {
+    // Fallback: load directly via engine
+    const engine = new PdfEngine();
+    const doc = await engine.load(await file.arrayBuffer());
+    useDocumentStore.getState().setDocument(doc, fileName, file.size);
+    useUIStore.getState().setZoom(1.0);
+  }
+}

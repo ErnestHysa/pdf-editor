@@ -302,6 +302,10 @@ function validateFromStore(targetIds: string[], type: HistoryActionType): boolea
   });
 }
 
+// Snapshot cache for getSnapshot memoization — avoids infinite loop with useSyncExternalStore
+let snapshotCache: { actions: Array<{id: string; data: HistoryActionData; timestamp: number}>; pointer: number } | null = null;
+let snapshotCacheVersion = -1;
+
 export const useHistoryStore = create<HistoryState>((set, get) => ({
   actions: [],
   pointer: -1,
@@ -387,13 +391,18 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   getSnapshot: () => {
     const { actions, pointer } = get();
-    return {
-      actions: actions.map((a) => ({
-        id: a.id,
-        data: a.data,
-        timestamp: a.timestamp,
-      })),
-      pointer,
-    };
+    const version = actions.length + pointer;
+    if (!snapshotCache || snapshotCacheVersion !== version) {
+      snapshotCache = {
+        actions: actions.map((a) => ({
+          id: a.id,
+          data: a.data,
+          timestamp: a.timestamp,
+        })),
+        pointer,
+      };
+      snapshotCacheVersion = version;
+    }
+    return snapshotCache;
   },
 }));

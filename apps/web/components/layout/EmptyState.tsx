@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Upload, FileText, X, Clock, File } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRecentFiles, RecentFile } from "@/hooks/useRecentFiles";
+import { __setProgrammaticHandler } from "@/hooks/useFileHandler";
 import { PdfEngine } from "@pagecraft/pdf-engine";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -122,6 +123,12 @@ export function EmptyState({ onFile }: EmptyStateProps) {
       setIsLoading(false);
     }
   }, [setDocument, setZoom]);
+
+  // Register programmatic PDF loading handler (for ?pdf= URL param)
+  useEffect(() => {
+    __setProgrammaticHandler(handleFile);
+    return () => { __setProgrammaticHandler(() => Promise.resolve()); };
+  }, [handleFile]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[500px] px-8">

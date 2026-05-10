@@ -103,6 +103,17 @@ export function EditorPage() {
   
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Check for ?pdf= URL param on mount to auto-load a PDF file
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pdfParam = params.get('pdf');
+    if (pdfParam && !pdfDocument && !hasFile) {
+      import('@/hooks/useFileHandler').then(({ __loadPdfFromUrl }) => {
+        __loadPdfFromUrl(`/${pdfParam}`).catch(console.error);
+      });
+    }
+  }, []);
+
   // Canvas long-press handler: show context menu at viewport-relative coordinates
   // canvasX/canvasY are in canvas-space (untransformed); convert to viewport-space
   const handleCanvasLongPress = useCallback((canvasX: number, canvasY: number) => {

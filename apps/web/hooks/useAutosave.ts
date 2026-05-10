@@ -33,7 +33,7 @@ interface BroadcastMessage {
 }
 
 async function getDb(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, DB_VERSION, {
+  const db = await openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion) {
       if (oldVersion < 2) {
         // Version 1 had no lastModified field; add it
@@ -55,6 +55,33 @@ async function getDb(): Promise<IDBPDatabase> {
       }
     },
   });
+
+  // idb v8 runs upgrade synchronously inside openDB before the Promise resolves.
+  // However, if the browser already has this DB version from a prior session, the
+  // upgrade callback won't fire — but the stores should already exist. Validate
+  // them to handle corrupted/missing store cases. If either is absent, force a
+  // version bump to trigger a fresh upgrade and recreate the stores.
+  if (
+    !db.objectStoreNames.contains(HISTORY_STORE_NAME) ||
+    !db.objectStoreNames.contains(OVERLAY_STORE_NAME)
+  ) {
+    db.close();
+    return openDB(DB_NAME, DB_VERSION + 1, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
+          db.createObjectStore(HISTORY_STORE_NAME, { keyPath: "docId" });
+        }
+        if (!db.objectStoreNames.contains(OVERLAY_STORE_NAME)) {
+          db.createObjectStore(OVERLAY_STORE_NAME, { keyPath: "docId" });
+        }
+      },
+    });
+  }
+
+  return db;
 }
 
 // Generate a unique tab ID for BroadcastChannel identification
@@ -455,11 +482,8 @@ export async function saveHistory(
 ): Promise<void> {
   try {
     const db = await getDb();
-    await db.put(
-      HISTORY_STORE_NAME,
-      { docId: historyKey(docId), ...snapshot },
-      historyKey(docId)
-    );
+    const key = historyKey(docId);
+    await db.put(HISTORY_STORE_NAME, { docId: key, ...snapshot }, key);
     console.debug("[Autosave] history saved for doc:", docId);
   } catch (err) {
     console.error("[Autosave] saveHistory failed:", err);
