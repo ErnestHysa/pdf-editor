@@ -83,6 +83,7 @@ export function EditorPage() {
   const {
     zoom, setZoom, panOffset, setPanOffset,
     leftSidebarOpen, rightPanelOpen,
+    toast,
   } = useUIStore();
 
   const { undo, redo } = useHistoryStore();
@@ -386,9 +387,9 @@ export function EditorPage() {
       )}
 
       {/* Toast notifications */}
-      {useUIStore((s) => s.toast) && (
+      {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 bg-red-500 text-white text-sm rounded-lg shadow-lg flex items-center gap-2">
-          <span>{useUIStore((s) => s.toast)}</span>
+          <span>{toast}</span>
           <button
             onClick={() => useUIStore.getState().setToast(null)}
             className="ml-2 hover:opacity-80"
