@@ -39,6 +39,8 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
+  if (!open) return null;
+
   // Focus trap: restore focus on close
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -75,8 +77,6 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
   }, []);
-
-  if (!open) return null;
 
   const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
