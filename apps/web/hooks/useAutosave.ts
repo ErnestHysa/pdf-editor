@@ -10,10 +10,11 @@ import { exportPdfWithChanges } from "./usePdfExporter";
 import { AUTOSAVE_DEBOUNCE_MS, AUTOSAVE_JITTER_MS } from "@/lib/constants";
 
 const DB_NAME = "pagecraft";
-const DB_VERSION = 4; // Bump version; adds overlay store for Zustand-only objects
+const DB_VERSION = 5;
 const STORE_NAME = "documents";
 const HISTORY_STORE_NAME = "history";
 const OVERLAY_STORE_NAME = "overlay";
+const SCHEMA_KEY = "__schema_version"; // Stored inside the documents store to validate schema
 const BROADCAST_CHANNEL_NAME = "pagecraft-documents";
 
 interface SavedDocument {
@@ -33,40 +34,44 @@ interface BroadcastMessage {
 }
 
 async function getDb(): Promise<IDBPDatabase> {
-  const db = await openDB(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
-      if (oldVersion < 2) {
-        // Version 1 had no lastModified field; add it
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        }
+  // Always open with the current DB_VERSION. The schema validation below is
+  // version-agnostic — we check whether the stores we need actually exist,
+  // and recreate them if missing, without needing to bump the DB version.
+  let db = await openDB(DB_NAME, DB_VERSION, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
-      if (oldVersion < 3) {
-        // Version 3 adds history store
-        if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
-          db.createObjectStore(HISTORY_STORE_NAME, { keyPath: "docId" });
-        }
+      if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
+        db.createObjectStore(HISTORY_STORE_NAME, { keyPath: "docId" });
       }
-      if (oldVersion < 4) {
-        // Version 4 adds overlay store for Zustand-only objects
-        if (!db.objectStoreNames.contains(OVERLAY_STORE_NAME)) {
-          db.createObjectStore(OVERLAY_STORE_NAME, { keyPath: "docId" });
-        }
+      if (!db.objectStoreNames.contains(OVERLAY_STORE_NAME)) {
+        db.createObjectStore(OVERLAY_STORE_NAME, { keyPath: "docId" });
       }
+    },
+    blocked() {
+      console.warn('[Autosave] DB open blocked by another tab');
+    },
+    blocking() {
+      // Force close this connection so the blocking tab can upgrade
+      indexedDB.deleteDatabase(DB_NAME);
     },
   });
 
-  // idb v8 runs upgrade synchronously inside openDB before the Promise resolves.
-  // However, if the browser already has this DB version from a prior session, the
-  // upgrade callback won't fire — but the stores should already exist. Validate
-  // them to handle corrupted/missing store cases. If either is absent, force a
-  // version bump to trigger a fresh upgrade and recreate the stores.
-  if (
-    !db.objectStoreNames.contains(HISTORY_STORE_NAME) ||
-    !db.objectStoreNames.contains(OVERLAY_STORE_NAME)
-  ) {
+  // Verify all required stores are present. If any are missing, the prior
+  // upgrade didn't run (e.g. another tab had the DB open at the same version).
+  // Close and delete the DB, then reopen — this time the upgrade WILL fire.
+  const required = [STORE_NAME, HISTORY_STORE_NAME, OVERLAY_STORE_NAME];
+  const missing = required.filter((s) => !db.objectStoreNames.contains(s));
+  if (missing.length > 0) {
+    console.warn('[Autosave] Stores missing after open:', missing, '— recreating DB');
     db.close();
-    return openDB(DB_NAME, DB_VERSION + 1, {
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(DB_NAME);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    db = await openDB(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME, { keyPath: "id" });
