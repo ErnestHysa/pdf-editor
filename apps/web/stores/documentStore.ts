@@ -247,9 +247,11 @@ export const useDocumentStore = create<DocumentState>()(
       set((state) => { state.saveStatus = status; }),
     setLastSavedAt: (timestamp: number | null) =>
       set((state) => { state.lastSavedAt = timestamp; }),
-    setActivePage: (index) =>
+setActivePage: (index) =>
       set((state) => {
         state.activePageIndex = index;
+        // Trigger targeted reload so PdfPageCanvas re-renders the new active page
+        state.targetedReloads = { ...state.targetedReloads, [index]: Date.now() };
       }),
     setParsingProgress: (progress) =>
       set((state) => { state.parsingProgress = progress; }),

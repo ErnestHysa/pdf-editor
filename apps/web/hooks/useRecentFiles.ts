@@ -29,7 +29,10 @@ export async function sha256(buffer: ArrayBuffer): Promise<string> {
 }
 
 async function getDb(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, DB_VERSION, {
+  // Always open with the current DB_VERSION. The schema validation below is
+  // version-agnostic — we check whether the stores we need actually exist,
+  // and recreate them if missing, without needing to bump the DB version.
+  let db = await openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion) {
       if (oldVersion < 4) {
         if (!db.objectStoreNames.contains(RECENT_FILES_STORE)) {
@@ -49,6 +52,42 @@ async function getDb(): Promise<IDBPDatabase> {
       }
     },
   });
+
+  // Verify all required stores are present. If any are missing, the prior
+  // upgrade didn't run (e.g. another tab had the DB open at the same version).
+  // Close and delete the DB, then reopen — this time the upgrade WILL fire.
+  const required = [STORE_NAME, HISTORY_STORE_NAME, OVERLAY_STORE_NAME];
+  const missing = required.filter((s) => !db.objectStoreNames.contains(s));
+  if (missing.length > 0) {
+    console.warn('[RecentFiles] Stores missing after open:', missing, '— recreating DB');
+    db.close();
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(DB_NAME);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    // Always provide an upgrade callback so stores are (re)created on re-open.
+    db = await openDB(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 4) {
+          if (!db.objectStoreNames.contains(RECENT_FILES_STORE)) {
+            db.createObjectStore(RECENT_FILES_STORE, { keyPath: "hash" });
+          }
+        }
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
+          db.createObjectStore(HISTORY_STORE_NAME, { keyPath: "docId" });
+        }
+        if (!db.objectStoreNames.contains(OVERLAY_STORE_NAME)) {
+          db.createObjectStore(OVERLAY_STORE_NAME, { keyPath: "docId" });
+        }
+      },
+    });
+  }
+
+  return db;
 }
 
 /** Generate a thumbnail (100x140) of the first page of a PDF from an ArrayBuffer */
