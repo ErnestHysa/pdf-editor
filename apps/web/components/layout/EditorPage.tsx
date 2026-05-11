@@ -283,7 +283,18 @@ export function EditorPage() {
 
   if (!pdfDocument) {
     return (
-      <div className="flex flex-col h-screen bg-bg-base">
+      <div
+        className="flex flex-col h-screen bg-bg-base"
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const file = e.dataTransfer.files[0];
+          if (file && file.type === 'application/pdf') {
+            handleFile(file).catch((err) => setPdfError(err instanceof Error ? err.message : 'Failed to open file'));
+          }
+        }}
+      >
         <TopBar />
         <main className="flex-1 overflow-hidden">
           <EmptyState
@@ -298,7 +309,18 @@ export function EditorPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-bg-base overflow-hidden">
+    <div
+      className="flex flex-col h-screen bg-bg-base overflow-hidden"
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = e.dataTransfer.files[0];
+        if (file && file.type === 'application/pdf') {
+          handleFile(file).catch((err) => setPdfError(err instanceof Error ? err.message : 'Failed to open file'));
+        }
+      }}
+    >
       {/* Skip to main content — visible to screen readers, hidden visually */}
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded">
         Skip to main content
