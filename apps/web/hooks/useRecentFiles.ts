@@ -4,7 +4,7 @@ import { openDB, IDBPDatabase } from "idb";
 import * as pdfjsLib from "pdfjs-dist/legacy";
 
 const DB_NAME = "pagecraft";
-const DB_VERSION = 4; // Bump for hash-based IDs
+const DB_VERSION = 6; // Must match documentStore DB_VERSION
 const RECENT_FILES_STORE = "recentFiles";
 
 export interface RecentFile {
