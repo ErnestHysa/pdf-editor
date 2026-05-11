@@ -120,7 +120,7 @@ const SortableThumbnailSlot = memo(function SortableThumbnailSlot({
       const scale = thumbWidth / width;
       canvasRef.current.width = thumbWidth;
       canvasRef.current.height = height * scale;
-      const ctx = canvasRef.current.getContext("2d");
+      const ctx = canvasRef.current.getContext("2d", { willReadFrequently: true });
       if (!ctx) return;
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, thumbWidth, canvasRef.current.height);

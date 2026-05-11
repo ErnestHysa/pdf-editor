@@ -15,7 +15,7 @@ interface RightPanelProps {
 }
 
 export function RightPanel({ open }: RightPanelProps) {
-  const { rightPanelOpen, toggleRightPanel } = useUIStore();
+  const { rightPanelOpen, setRightPanelOpen } = useUIStore();
   const { pdfDocument, forceReload, setDirty } = useDocumentStore();
   const selectedObjects = useSelectionStore((s) => s.selectedObjects);
   const textObjects = useObjectsStore((s) => s.textObjects);
@@ -46,7 +46,7 @@ export function RightPanel({ open }: RightPanelProps) {
           {selection ? "Properties" : "Page"}
         </span>
         <button
-          onClick={toggleRightPanel}
+          onClick={() => setRightPanelOpen(false)}
           className="p-1 rounded hover:bg-bg-hover text-text-tertiary"
           aria-label="Close panel"
         >

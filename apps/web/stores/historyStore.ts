@@ -325,9 +325,6 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         executeRedo: buildExecuteRedo(data),
       };
       actions.push(newAction);
-      if (actions.length > state.maxSize) {
-        actions.shift();
-      }
       return { actions, pointer: actions.length - 1 };
     }),
 

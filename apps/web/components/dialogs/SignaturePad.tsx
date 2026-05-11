@@ -19,6 +19,7 @@ interface SignaturePadProps {
 type Tab = "draw" | "type" | "upload";
 
 export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
+  // All hooks MUST be before any conditional return
   const [activeTab, setActiveTab] = useState<Tab>("draw");
   const [typedText, setTypedText] = useState("");
   const [fontSize, setFontSize] = useState(48);
@@ -28,6 +29,8 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Escape key handler
   useEffect(() => {
@@ -39,16 +42,10 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  if (!open) return null;
-
   // Focus trap: restore focus on close
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
   useEffect(() => {
     if (open) {
       previousFocusRef.current = document.activeElement as HTMLElement;
-      // Focus first focusable element in dialog
       const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
@@ -65,18 +62,19 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Set canvas size
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * 2;
     canvas.height = rect.height * 2;
     ctx.scale(2, 2);
 
-    // Style
     ctx.strokeStyle = "#F0EDE8";
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
   }, []);
+
+  // Conditional return AFTER all hooks
+  if (!open) return null;
 
   const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;

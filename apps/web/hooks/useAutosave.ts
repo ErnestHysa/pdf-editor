@@ -487,9 +487,7 @@ export async function saveHistory(
 ): Promise<void> {
   try {
     const db = await getDb();
-    const key = historyKey(docId);
-    await db.put(HISTORY_STORE_NAME, { docId: key, ...snapshot });
-    console.debug("[Autosave] history saved for doc:", docId);
+    await db.put(HISTORY_STORE_NAME, { docId, ...snapshot });
   } catch (err) {
     console.error("[Autosave] saveHistory failed:", err);
   }
@@ -501,7 +499,7 @@ export async function loadHistory(
 ): Promise<import("@/stores/historyStore").HistorySnapshot | null> {
   try {
     const db = await getDb();
-    const saved = await db.get(HISTORY_STORE_NAME, historyKey(docId));
+    const saved = await db.get(HISTORY_STORE_NAME, docId);
     return saved ?? null;
   } catch (err) {
     console.error("[Autosave] loadHistory failed:", err);
@@ -513,7 +511,7 @@ export async function loadHistory(
 export async function deleteHistory(docId: string): Promise<void> {
   try {
     const db = await getDb();
-    await db.delete(HISTORY_STORE_NAME, historyKey(docId));
+    await db.delete(HISTORY_STORE_NAME, docId);
   } catch (err) {
     console.error("[Autosave] deleteHistory failed:", err);
   }

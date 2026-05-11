@@ -16,7 +16,7 @@ interface Command {
   action: () => void;
 }
 
-export function CommandPalette({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
+export function CommandPalette() {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -24,7 +24,7 @@ export function CommandPalette({ open = false, onClose }: { open?: boolean; onCl
   const { undo, redo, push } = useHistoryStore();
   const { pdfDocument } = useDocumentStore();
   const clearSelection = useSelectionStore((s) => s.clearSelection);
-  const { setZoom } = useUIStore();
+  const { setZoom, commandPaletteOpen, setCommandPaletteOpen } = useUIStore();
 
   const commands: Command[] = [
     // ── Tools ──────────────────────────────────────────────────────
@@ -106,19 +106,19 @@ export function CommandPalette({ open = false, onClose }: { open?: boolean; onCl
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) onClose();
+      if (e.key === 'Escape') setCommandPaletteOpen(false);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
-    if (open) {
+    if (commandPaletteOpen) {
       setQuery('');
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 10);
     }
-  }, [open]);
+  }, [commandPaletteOpen]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -126,13 +126,13 @@ export function CommandPalette({ open = false, onClose }: { open?: boolean; onCl
 
   const execute = useCallback((cmd: Command) => {
     cmd.action();
-    if (onClose) onClose();
-  }, [onClose]);
+    setCommandPaletteOpen(false);
+  }, []);
 
-  if (!open) {
+  if (!commandPaletteOpen) {
     return (
       <button
-        onClick={onClose}
+        onClick={() => setCommandPaletteOpen(true)}
         className="fixed top-3 right-20 z-50 px-3 py-1.5 rounded-lg bg-elevated border border-border text-xs text-secondary hover:text-primary hover:border-border-strong transition-colors hidden md:flex items-center gap-2"
       >
         <span>⌘K</span>
@@ -144,7 +144,7 @@ export function CommandPalette({ open = false, onClose }: { open?: boolean; onCl
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
-      onClick={onClose}
+      onClick={() => setCommandPaletteOpen(false)}
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div

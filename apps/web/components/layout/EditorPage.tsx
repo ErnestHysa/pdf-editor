@@ -418,7 +418,7 @@ export function EditorPage() {
 
       {/* Global UI overlays */}
       <UndoRedoPill />
-      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
+      <CommandPalette />
       {showShortcuts && (
         <KeyboardShortcutsOverlay onClose={() => setShowShortcuts(false)} />
       )}

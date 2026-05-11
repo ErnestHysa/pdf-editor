@@ -6,6 +6,10 @@ import * as pdfjsLib from "pdfjs-dist/legacy";
 const DB_NAME = "pagecraft";
 const DB_VERSION = 6; // Must match documentStore DB_VERSION
 const RECENT_FILES_STORE = "recentFiles";
+// Also reference the same store names as useAutosave for coordinated schema init
+const STORE_NAME = "documents";
+const HISTORY_STORE_NAME = "history";
+const OVERLAY_STORE_NAME = "overlay";
 
 export interface RecentFile {
   hash: string;       // SHA-256 content hash (used as id)
@@ -31,6 +35,17 @@ async function getDb(): Promise<IDBPDatabase> {
         if (!db.objectStoreNames.contains(RECENT_FILES_STORE)) {
           db.createObjectStore(RECENT_FILES_STORE, { keyPath: "hash" });
         }
+      }
+      // Ensure all stores used by the app exist — useAutosave and useRecentFiles
+      // share the same DB, so both must participate in the upgrade to avoid races (#6)
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
+        db.createObjectStore(HISTORY_STORE_NAME, { keyPath: "docId" });
+      }
+      if (!db.objectStoreNames.contains(OVERLAY_STORE_NAME)) {
+        db.createObjectStore(OVERLAY_STORE_NAME, { keyPath: "docId" });
       }
     },
   });

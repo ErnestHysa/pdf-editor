@@ -29,6 +29,7 @@ interface UIState {
   toggleLeftSidebar: () => void;
   toggleRightPanel: () => void;
   setActivePanel: (panel: UIState['activePanel']) => void;
+  setRightPanelOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setExportDialogOpen: (open: boolean) => void;
   setInsertPageDialog: (open: boolean, mode?: UIState['insertPageDialogMode']) => void;
@@ -104,6 +105,11 @@ export const useUIStore = create<UIState>()(
     setActivePanel: (panel) =>
       set((state) => {
         state.activePanel = panel;
+      }),
+
+    setRightPanelOpen: (open) =>
+      set((state) => {
+        state.rightPanelOpen = open;
       }),
 
     setCommandPaletteOpen: (open) =>
