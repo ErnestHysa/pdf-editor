@@ -392,7 +392,7 @@ export const useDocumentStore = create<DocumentState>()(
       const currentRotation = page.getRotation();
       const delta = direction === "left" ? -90 : 90;
       const newRotation = (currentRotation + delta + 360) % 360;
-      page.setRotation(newRotation);
+      page.setRotation(newRotation); // degrees() called inside Page.setRotation()
       set((state) => {
         state.isDirty = true;
         state.targetedReloads[index] = Date.now();

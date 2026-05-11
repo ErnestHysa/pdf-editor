@@ -46,6 +46,9 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+  // Per-page reload trigger — rotate/crop/etc bump targetedReloads[pageIndex]
+  const targetedReload = useDocumentStore((s: any) => s.targetedReloads[pageIndex] ?? 0);
+
   // Store actions
   const { duplicatePage, deletePage, rotatePage, cropPage } = useDocumentStore();
   const pageCount = useDocumentStore((s) => s.pdfDocument?.getPageCount() ?? 0) as number;
@@ -89,9 +92,10 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
 
   useEffect(() => {
     if (!canvasRef.current || !pdfJsDoc) return;
-    if (rendered.current) return;
 
     let cancelled = false;
+    rendered.current = false; // Reset on any dependency change (incl. targetedReload)
+
     const doRender = async () => {
       // Small delay to let main canvas rendering start first and avoid
       // pdfjs-dist "Cannot use the same canvas during multiple render operations"
@@ -121,7 +125,6 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
         await pdfPage.render(renderContext as any).promise;
         if (!cancelled) {
           rendered.current = true;
-          console.log(`[Thumbnail] page ${pageIndex + 1} rendered`);
         }
       } catch (err) {
         if (!cancelled) console.error(`[Thumbnail] page ${pageIndex + 1} error:`, (err as Error).message);
@@ -133,7 +136,7 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
     return () => {
       cancelled = true;
     };
-  }, [pdfJsDoc, pageIndex, width, height]);
+  }, [pdfJsDoc, pageIndex, width, height, targetedReload]);
 
   return (
     <>
