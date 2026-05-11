@@ -488,7 +488,7 @@ export async function saveHistory(
   try {
     const db = await getDb();
     const key = historyKey(docId);
-    await db.put(HISTORY_STORE_NAME, { docId: key, ...snapshot }, key);
+    await db.put(HISTORY_STORE_NAME, { docId: key, ...snapshot });
     console.debug("[Autosave] history saved for doc:", docId);
   } catch (err) {
     console.error("[Autosave] saveHistory failed:", err);
@@ -555,7 +555,7 @@ export async function saveOverlayState(docId: string): Promise<void> {
       searchCurrentMatchIndex: searchState.searchCurrentMatchIndex,
     };
     const db = await getDb();
-    await db.put(OVERLAY_STORE_NAME, { docId, ...overlay }, docId);
+    await db.put(OVERLAY_STORE_NAME, { docId, ...overlay });
     console.debug("[Autosave] overlay saved for doc:", docId);
   } catch (err) {
     console.error("[Autosave] saveOverlayState failed:", err);

@@ -27,7 +27,7 @@ export function RightPanel({ open }: RightPanelProps) {
   const { toolOptions, setToolOption } = useToolStore();
   const { activeTool } = useToolStore();
 
-  if (!open || !rightPanelOpen) return null;
+  if (!open) return null;
 
   const selection = selectedObjects.length > 0 ? selectedObjects[0] : null;
   const activePageIndex = useDocumentStore.getState().activePageIndex;

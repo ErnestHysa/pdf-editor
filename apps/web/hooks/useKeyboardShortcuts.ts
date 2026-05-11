@@ -107,7 +107,7 @@ export function useKeyboardShortcuts({
 
       if (e.key === 'Escape') { clearSelection(); setContextMenu(null); if (showShortcuts) setShowShortcuts(false); return; }
       if (e.key === '?') { e.preventDefault(); setShowShortcuts((v) => !v); return; }
-      if (isMod && e.key === 'k') { e.preventDefault(); handleCommandPaletteToggle(); return; }
+      if (isMod && e.key === 'k') { e.preventDefault(); useUIStore.getState().setCommandPaletteOpen(true); return; }
 
       const currentSelected = useSelectionStore.getState().selectedObjects;
       const currentTextObjects = useObjectsStore.getState().textObjects;
