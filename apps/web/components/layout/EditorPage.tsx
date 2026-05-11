@@ -32,6 +32,7 @@ import { ContextMenu } from '@/components/canvas/ContextMenu';
 import { PageCanvas } from '@/components/canvas/PageCanvas';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FontWarningBanner } from '@/components/ui/FontWarningBanner';
+import { InsertPageDialog } from '@/components/dialogs/InsertPageDialog';
 import { useDeviceType } from '@/hooks/useDeviceType';
 import { useGestures } from '@/hooks/useGestures';
 
@@ -83,6 +84,7 @@ export function EditorPage() {
   const {
     zoom, setZoom, panOffset, setPanOffset,
     leftSidebarOpen, rightPanelOpen,
+    insertPageDialogOpen, insertPageDialogMode, setInsertPageDialog,
     toast,
   } = useUIStore();
 
@@ -418,6 +420,14 @@ export function EditorPage() {
       {showShortcuts && (
         <KeyboardShortcutsOverlay onClose={() => setShowShortcuts(false)} />
       )}
+
+      {/* Insert page dialog */}
+      <InsertPageDialog
+        open={insertPageDialogOpen}
+        onClose={() => setInsertPageDialog(false)}
+        mode={insertPageDialogMode}
+        insertAfterIndex={activePageIndex}
+      />
 
       {/* Toast notifications */}
       {toast && (

@@ -4,7 +4,6 @@ import { useUIStore } from "@/stores/uiStore";
 import { useDocumentStore } from "@/stores/documentStore";
 import { useToolStore } from "@/stores/toolStore";
 import { SortableThumbnails } from "@/components/canvas/SortableThumbnails";
-import { InsertPageDialog } from "@/components/dialogs/InsertPageDialog";
 import { SignaturePad } from "@/components/dialogs/SignaturePad";
 import { Plus, Trash2, Copy, FileUp, MoreHorizontal, Pen } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,20 +17,16 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
   const { pdfDocument, activePageIndex, deletePage, duplicatePage, reorderPages } =
     useDocumentStore();
 
-  const [insertDialogOpen, setInsertDialogOpen] = useState(false);
-  const [insertDialogMode, setInsertDialogMode] = useState<"blank" | "file">("blank");
   const [contextMenuPageIndex, setContextMenuPageIndex] = useState<number | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
   const [signaturePadOpen, setSignaturePadOpen] = useState(false);
 
   const handleAddPage = useCallback(() => {
-    setInsertDialogMode("blank");
-    setInsertDialogOpen(true);
+    useUIStore.getState().setInsertPageDialog(true, "blank");
   }, []);
 
   const handleInsertFromFile = useCallback(() => {
-    setInsertDialogMode("file");
-    setInsertDialogOpen(true);
+    useUIStore.getState().setInsertPageDialog(true, "file");
   }, []);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -117,8 +112,7 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
               <div className="hidden group-hover:block absolute right-0 top-full mt-1 bg-bg-elevated border border-border rounded-lg shadow-xl py-1 min-w-[160px] z-50">
                 <button
                   onClick={() => {
-                    setInsertDialogMode("blank");
-                    setInsertDialogOpen(true);
+                    useUIStore.getState().setInsertPageDialog(true, "blank");
                   }}
                   className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
                 >
@@ -127,8 +121,7 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
                 </button>
                 <button
                   onClick={() => {
-                    setInsertDialogMode("file");
-                    setInsertDialogOpen(true);
+                    useUIStore.getState().setInsertPageDialog(true, "file");
                   }}
                   className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
                 >
@@ -174,8 +167,7 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
                   </button>
                   <button
                     onClick={() => {
-                      setInsertDialogMode("blank");
-                      setInsertDialogOpen(true);
+                      useUIStore.getState().setInsertPageDialog(true, "blank");
                     }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
                   >
@@ -184,8 +176,7 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
                   </button>
                   <button
                     onClick={() => {
-                      setInsertDialogMode("file");
-                      setInsertDialogOpen(true);
+                      useUIStore.getState().setInsertPageDialog(true, "file");
                     }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
                   >
@@ -228,14 +219,6 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
           </button>
         </div>
       )}
-
-      {/* Insert page dialog */}
-      <InsertPageDialog
-        open={insertDialogOpen}
-        onClose={() => setInsertDialogOpen(false)}
-        mode={insertDialogMode}
-        insertAfterIndex={activePageIndex}
-      />
 
       {/* Delete page confirmation dialog */}
       {showDeleteConfirm && pendingDeleteIndex !== null && (
