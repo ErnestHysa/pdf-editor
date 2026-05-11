@@ -131,8 +131,9 @@ export async function exportPdfWithChanges(): Promise<Uint8Array> {
     const page = pages[pageIndex];
 
     for (const textObj of objects) {
-      // Skip if this is an unmodified original (has a real PDF object ref)
-      if (textObj.objectRef && textObj.objectRef !== "new") continue;
+      // Skip if this is an unmodified original from PDF parse (empty objectRef = parsed text)
+      // Only "new" text objects (user-created in editor) should be drawn as overlays
+      if (textObj.objectRef !== "new") continue;
 
       // Parse font — use Helvetica for all exports since custom font files are not available
       // TODO #36: Load actual .ttf/.otf font files to enable font-family embedding
@@ -266,9 +267,11 @@ export async function exportPdfFlattened(): Promise<Uint8Array> {
     const pageHeight = page.getHeight();
     const pageWidth = page.getWidth();
 
-    // Draw all text objects (including originals with refs)
+    // Draw all text objects (only "new" user-created; skip parsed PDF text)
     const pageTexts = textByPage.get(pageIndex) ?? [];
     for (const textObj of pageTexts) {
+      // Skip parsed PDF text (objectRef is "" for parsed, "new" for user-created)
+      if (textObj.objectRef !== "new") continue;
       let font;
       try {
         font = await libDoc.embedFont(StandardFonts.Helvetica);
