@@ -73,9 +73,7 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
     ctx.lineWidth = 2;
   }, []);
 
-  // Conditional return AFTER all hooks
-  if (!open) return null;
-
+  // ── Drawing callbacks (must be before early return — hooks can't move after conditional) ──
   const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -186,6 +184,9 @@ export function SignaturePad({ open, onClose, onSave }: SignaturePadProps) {
       setIsSaving(false);
     }
   }, [activeTab, typedText, fontSize, uploadedPreview, onSave, isSaving]);
+
+  // Conditional return AFTER all hooks
+  if (!open) return null;
 
   const tabs: { id: Tab; label: string; icon: typeof Pen }[] = [
     { id: "draw", label: "Draw", icon: Pen },
