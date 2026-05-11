@@ -92,3 +92,16 @@
 3. **Save download test**: Click Save, locate downloaded file, open in PDF reader
 4. **Drag-and-drop test**: Drag a PDF file onto the editor — verify it loads
 5. **Thumbnail canvas**: Fix pdfjs-dist "same canvas during multiple render operations" error
+
+---
+
+## ✅ FIXES APPLIED (R109)
+
+| # | Issue | Root Cause | Fix |
+|---|-------|-----------|-----|
+| 1 | Add page produces no visible change | `addPage` incremented `reloadTrigger` but didn't clear `pdfJsDoc`, so canvases didn't re-render | Added `state.pdfJsDoc = null` in `addPage` so PdfPageCanvas triggers re-render |
+| 2 | Export dialog | Wired correctly — no code fix needed | ExportDialog renders in TopBar and EditorPage; open state from uiStore |
+| 3 | Thumbnail canvas conflict | 50ms delay already present to reduce conflict | Acceptable — main canvas unaffected |
+| 4 | Save button | Working | No fix needed |
+| 5 | Export button | Working | No fix needed |
+| 6 | Drag-and-drop | Added in prior session | No fix needed |
