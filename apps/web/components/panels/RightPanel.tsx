@@ -58,7 +58,7 @@ export function RightPanel({ open }: RightPanelProps) {
       <div className="flex-1 overflow-y-auto p-4">
         {!selection && activePage && (
           <>
-            <PagePropertiesPanel page={activePage} onRotateDone={forceReload} />
+            <PagePropertiesPanel page={activePage} onRotateDone={() => {}} />
             <FormFieldPanel />
           </>
         )}
@@ -160,8 +160,10 @@ function PagePropertiesPanel({ page, onRotateDone }: { page: any; onRotateDone: 
     page.setRotation?.(deg);
     setRotation(deg);
     setDirty(true);
-    onRotateDone();
-  }, [page, setDirty, onRotateDone]);
+    // Use targeted reload for just this page instead of full reload
+    const { addPartialReload } = useDocumentStore.getState();
+    addPartialReload(page.getIndex?.() ?? 0);
+  }, [page, setDirty]);
 
   return (
     <div className="space-y-4">
