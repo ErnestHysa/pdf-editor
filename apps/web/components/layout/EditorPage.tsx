@@ -33,6 +33,7 @@ import { PageCanvas } from '@/components/canvas/PageCanvas';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FontWarningBanner } from '@/components/ui/FontWarningBanner';
 import { InsertPageDialog } from '@/components/dialogs/InsertPageDialog';
+import { ExportDialog } from '@/components/dialogs/ExportDialog';
 import { useDeviceType } from '@/hooks/useDeviceType';
 import { useGestures } from '@/hooks/useGestures';
 
@@ -85,6 +86,7 @@ export function EditorPage() {
     zoom, setZoom, panOffset, setPanOffset,
     leftSidebarOpen, rightPanelOpen,
     insertPageDialogOpen, insertPageDialogMode, setInsertPageDialog,
+    exportDialogOpen, setExportDialogOpen,
     toast,
   } = useUIStore();
 
@@ -427,6 +429,12 @@ export function EditorPage() {
         onClose={() => setInsertPageDialog(false)}
         mode={insertPageDialogMode}
         insertAfterIndex={activePageIndex}
+      />
+
+      {/* Export dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
       />
 
       {/* Toast notifications */}
