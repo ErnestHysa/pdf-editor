@@ -301,6 +301,7 @@ export const useDocumentStore = create<DocumentState>()(
         state.isDirty = true;
         state.activePageIndex = page.getIndex();
         state.reloadTrigger += 1;
+        state.pdfJsDoc = null; // null → triggers PdfPageCanvas re-render to pick up new page
       });
     },
 
