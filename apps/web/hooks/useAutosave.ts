@@ -71,6 +71,9 @@ async function getDb(): Promise<IDBPDatabase> {
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
+    // Always provide an upgrade callback so stores are (re)created on re-open.
+    // Without this, openDB at the same version does NOT fire the upgrade callback,
+    // leaving the DB with no stores after the delete-and-reopen cycle (#6).
     db = await openDB(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -82,6 +85,12 @@ async function getDb(): Promise<IDBPDatabase> {
         if (!db.objectStoreNames.contains(OVERLAY_STORE_NAME)) {
           db.createObjectStore(OVERLAY_STORE_NAME, { keyPath: "docId" });
         }
+      },
+      blocked() {
+        console.warn('[Autosave] DB open blocked by another tab');
+      },
+      blocking() {
+        indexedDB.deleteDatabase(DB_NAME);
       },
     });
   }

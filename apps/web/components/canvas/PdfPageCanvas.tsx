@@ -38,7 +38,7 @@ export const PdfPageCanvas = memo(function PdfPageCanvas({
     (async () => {
       const pdfPage = await pdfJsDoc.getPage(pageIndex + 1);
       if (cancelled) return;
-      const viewport = pdfPage.getViewport({ scale: renderScale });
+      const viewport = pdfPage.getViewport({ scale: renderScale, renderInteractiveForms: false });
       const canvas = canvasRef.current!;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
