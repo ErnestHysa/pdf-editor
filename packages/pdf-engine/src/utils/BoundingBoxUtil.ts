@@ -89,4 +89,23 @@ export class BoundingBoxUtil {
       rotation: bbox.rotation,
     };
   }
+
+  /**
+   * Normalize a bounding box that may have negative width and/or height
+   * (e.g. defined by dragging from right to left or bottom to top) into one
+   * with the same geometric region but guaranteed positive dimensions, with
+   * x/y adjusted to the new top-left corner. Does not mutate the input box.
+   */
+  static normalize(box: BoundingBox): BoundingBox {
+    let { x, y, width, height } = box;
+    if (width < 0) {
+      x = x + width;
+      width = -width;
+    }
+    if (height < 0) {
+      y = y + height;
+      height = -height;
+    }
+    return { x, y, width, height, rotation: box.rotation };
+  }
 }
