@@ -89,4 +89,11 @@ export class BoundingBoxUtil {
       rotation: bbox.rotation,
     };
   }
+
+  /**
+   * Compute the perimeter of a bounding box.
+   */
+  static perimeter(box: BoundingBox): number {
+    return 2 * (box.width + box.height);
+  }
 }
