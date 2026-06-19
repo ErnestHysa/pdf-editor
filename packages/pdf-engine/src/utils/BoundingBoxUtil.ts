@@ -89,4 +89,11 @@ export class BoundingBoxUtil {
       rotation: bbox.rotation,
     };
   }
+
+  /**
+   * Compute the diagonal length of a bounding box.
+   */
+  static diagonal(bbox: BoundingBox): number {
+    return Math.sqrt(bbox.width * bbox.width + bbox.height * bbox.height);
+  }
 }
