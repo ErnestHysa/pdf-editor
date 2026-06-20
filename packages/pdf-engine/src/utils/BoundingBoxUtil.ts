@@ -89,4 +89,12 @@ export class BoundingBoxUtil {
       rotation: bbox.rotation,
     };
   }
+
+  /**
+   * Compute the aspect ratio (width / height) of a bounding box.
+   */
+  static aspectRatio(box: BoundingBox): number {
+    if (box.height === 0) return NaN;
+    return box.width / box.height;
+  }
 }
