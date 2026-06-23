@@ -5,6 +5,7 @@ import { useDocumentStore } from "@/stores/documentStore";
 import { useToolStore } from "@/stores/toolStore";
 import { SortableThumbnails } from "@/components/canvas/SortableThumbnails";
 import { SignaturePad } from "@/components/dialogs/SignaturePad";
+import { ContextMenu } from "@/components/canvas/ContextMenu";
 import { Plus, Trash2, Copy, FileUp, MoreHorizontal, Pen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -149,54 +150,20 @@ export function LeftSidebar({ open }: LeftSidebarProps) {
 
             {/* Context menu */}
             {contextMenuPageIndex !== null && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={closeContextMenu}
-                />
-                <div
-                  className="fixed z-50 bg-bg-elevated border border-border rounded-lg shadow-xl py-1 min-w-[160px]"
-                  style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
-                >
-                  <button
-                    onClick={() => handleDuplicatePage(contextMenuPageIndex)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
-                  >
-                    <Copy size={14} />
-                    Duplicate page
-                  </button>
-                  <button
-                    onClick={() => {
-                      useUIStore.getState().setInsertPageDialog(true, "blank");
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
-                  >
-                    <Plus size={14} />
-                    Insert blank after
-                  </button>
-                  <button
-                    onClick={() => {
-                      useUIStore.getState().setInsertPageDialog(true, "file");
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
-                  >
-                    <FileUp size={14} />
-                    Insert from file
-                  </button>
-                  {canDelete && (
-                    <>
-                      <div className="h-px bg-border my-1" />
-                      <button
-                        onClick={() => openDeleteConfirm(contextMenuPageIndex)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-destructive"
-                      >
-                        <Trash2 size={14} />
-                        Delete page
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
+              <ContextMenu
+                x={contextMenuPos.x}
+                y={contextMenuPos.y}
+                items={[
+                  { label: "Duplicate page", action: () => handleDuplicatePage(contextMenuPageIndex) },
+                  { label: "Insert blank after", action: () => { useUIStore.getState().setInsertPageDialog(true, "blank"); } },
+                  { label: "Insert from file", action: () => { useUIStore.getState().setInsertPageDialog(true, "file"); } },
+                  ...(canDelete ? [
+                    { label: "", action: () => {}, divider: true },
+                    { label: "Delete page", action: () => openDeleteConfirm(contextMenuPageIndex) }
+                  ] : [])
+                ]}
+                onClose={closeContextMenu}
+              />
             )}
           </>
         ) : (

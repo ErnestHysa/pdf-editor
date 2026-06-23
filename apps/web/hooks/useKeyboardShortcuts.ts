@@ -68,7 +68,7 @@ export function useKeyboardShortcuts({
                   height: img.height,
                   src: dataUrl,
                   rotation: 0,
-                  objectRef: '',
+                  objectRef: 'new',
                 });
               };
               img.src = dataUrl;
@@ -95,7 +95,7 @@ export function useKeyboardShortcuts({
               color: '#000000',
               textAlign: 'left',
               rotation: 0,
-              objectRef: '',
+              objectRef: 'new',
             });
           }
         }).catch(() => {

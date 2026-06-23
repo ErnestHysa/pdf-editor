@@ -98,6 +98,15 @@ body {
   line-height: inherit;
   white-space: pre-wrap;
   word-break: break-word;
+  border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Parsed text overlay hover ─────────────────────────────── */
+.parsed-text-overlay:hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
 }
 
 .text-edit-overlay::selection {

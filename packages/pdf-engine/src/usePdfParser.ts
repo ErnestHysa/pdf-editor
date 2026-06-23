@@ -276,7 +276,7 @@ export class PdfParser {
         const isEmbedded = fontInfo?.embedded ?? fontName.startsWith("+");
 
         if (!isEmbedded) {
-          const baseName = fontName.replace(/[A-Za-z]+/, "").replace(/[-_]\w+/, "");
+          const baseName = fontName.replace(/[-_].+$/, "");
           if (!commonStandardFonts.includes(baseName) && baseName !== "") {
             warnings.push(
               `Font "${baseName}" is not embedded. The PDF may not render correctly without this font installed on the system.`

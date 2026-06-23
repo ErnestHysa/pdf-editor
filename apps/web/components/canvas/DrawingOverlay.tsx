@@ -130,9 +130,19 @@ export const DrawingOverlay = memo(function DrawingOverlay({
     const ctx = ctxRef.current;
     if (!ctx) return;
 
-    const imageData = canvas.toDataURL('image/png');
     const id = `drawing-${pageIndex}-${Date.now()}`;
     const bounds = getBoundingBoxOfPoints(drawingPointsRef.current);
+    // Capture only the bounding box region (not the full canvas) to avoid resolution mismatch (#15)
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = Math.max(bounds.width * renderScale, 4);
+    tempCanvas.height = Math.max(bounds.height * renderScale, 4);
+    const tempCtx = tempCanvas.getContext('2d')!;
+    tempCtx.drawImage(
+      canvas,
+      bounds.x * renderScale, bounds.y * renderScale, tempCanvas.width, tempCanvas.height,
+      0, 0, tempCanvas.width, tempCanvas.height
+    );
+    const imageData = tempCanvas.toDataURL('image/png');
     const newAnnotation: any = {
       id, type: 'drawing', pageIndex,
       x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,

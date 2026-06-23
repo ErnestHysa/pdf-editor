@@ -103,14 +103,19 @@ export const ObjectOverlays = memo(function ObjectOverlays({
         return (
           <div
             key={textObj.id}
-            className="absolute cursor-text"
+            className={`absolute cursor-text ${textObj.objectRef && textObj.objectRef !== 'new' ? 'parsed-text-overlay hover:bg-blue-500/10 hover:ring-1 hover:ring-blue-500/30 transition-colors' : ''}`}
             style={{
               left: textObj.x, top: textObj.y,
               width: textObj.width, height: textObj.height,
             }}
             onClick={(e) => {
               e.stopPropagation();
-              selectObject({ id: textObj.id, type: 'text', pageIndex });
+              // When text tool is active, single-click enters edit mode immediately
+              if (useToolStore.getState().activeTool === 'text') {
+                setEditingTextId(textObj.id);
+              } else {
+                selectObject({ id: textObj.id, type: 'text', pageIndex });
+              }
             }}
             onDoubleClick={(e) => {
               e.stopPropagation();
@@ -170,6 +175,22 @@ export const ObjectOverlays = memo(function ObjectOverlays({
                   onClose={() => setEditingTextId(null)}
                   onSave={(newContent) => {
                     const oldContent = textObj.content;
+                    // For parsed PDF text, attempt glyph-level edit in the PDF content stream
+                    if (textObj.objectRef && textObj.objectRef !== 'new') {
+                      const pdfDoc = useDocumentStore.getState().pdfDocument;
+                      if (pdfDoc) {
+                        const success = glyphPreservingEdit(
+                          pageIndex,
+                          textObj.objectRef,
+                          oldContent,
+                          newContent,
+                          pdfDoc
+                        );
+                        if (success) {
+                          useDocumentStore.getState().forceReload();
+                        }
+                      }
+                    }
                     useObjectsStore.getState().updateTextObject(textObj.id, { content: newContent });
                     setDirty(true);
                     setEditingTextId(null);
@@ -185,25 +206,6 @@ export const ObjectOverlays = memo(function ObjectOverlays({
                     const before = content.slice(0, activeMatch.matchStart);
                     const matched = content.slice(activeMatch.matchStart, activeMatch.matchEnd);
                     const after = content.slice(activeMatch.matchEnd);
-                    return (
-                      <span
-                        className="block overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
-                        style={{
-                          fontFamily: textObj.fontFamily,
-                          fontSize: textObj.fontSize,
-                          fontWeight: textObj.fontWeight,
-                          fontStyle: textObj.fontStyle,
-                          color: textObj.color,
-                          textAlign: textObj.textAlign,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {before}
-                        <span className="search-match-highlight font-bold">{matched}</span>
-                        {after}
-                      </span>
-                    );
-                  }
                   return (
                     <span
                       className="block overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
@@ -212,11 +214,30 @@ export const ObjectOverlays = memo(function ObjectOverlays({
                         fontSize: textObj.fontSize,
                         fontWeight: textObj.fontWeight,
                         fontStyle: textObj.fontStyle,
-                        color: textObj.color,
+                        color: textObj.objectRef === 'new' ? textObj.color : 'transparent',
                         textAlign: textObj.textAlign,
                         lineHeight: 1.4,
                       }}
                     >
+                      {before}
+                      <span className="search-match-highlight font-bold" style={{ color: textObj.color }}>{matched}</span>
+                      {after}
+                    </span>
+                  );
+                }
+                return (
+                  <span
+                    className="block overflow-hidden whitespace-pre-wrap break-words pointer-events-none"
+                    style={{
+                      fontFamily: textObj.fontFamily,
+                      fontSize: textObj.fontSize,
+                      fontWeight: textObj.fontWeight,
+                      fontStyle: textObj.fontStyle,
+                      color: textObj.objectRef === 'new' ? textObj.color : 'transparent',
+                      textAlign: textObj.textAlign,
+                      lineHeight: 1.4,
+                    }}
+                  >
                       {content}
                     </span>
                   );

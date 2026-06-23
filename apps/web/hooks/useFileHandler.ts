@@ -160,8 +160,10 @@ export async function __loadPdfFromUrl(url: string): Promise<void> {
   } else {
     // Fallback: load directly via engine
     const engine = new PdfEngine();
-    const doc = await engine.load(await file.arrayBuffer());
-    useDocumentStore.getState().setDocument(doc, fileName, file.size);
+    const buffer = await file.arrayBuffer();
+    const doc = await engine.load(buffer);
+    const docId = await computeHash(buffer);
+    useDocumentStore.getState().setDocument(doc, fileName, file.size, docId);
     useUIStore.getState().setZoom(1.0);
   }
 }

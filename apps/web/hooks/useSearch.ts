@@ -69,7 +69,6 @@ export function useSearch() {
     // objects are not added twice.
     if (pdfJsDoc) {
       try {
-        const existingIds = new Set(textObjects.map((t: any) => t.id));
         const pageCount = pdfJsDoc.numPages;
         // Quick scan: for each page, get text content and search raw strings
         for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
@@ -87,9 +86,13 @@ export function useSearch() {
           while ((idx = lowerRaw.indexOf(lowerQuery, searchStart)) !== -1) {
             // For raw matches, we construct a synthetic textObjectId so we can
             // highlight the page even if we don't have exact bbox.
+            // Skip raw fallback if parsed textObjects already exist for this page
+            const hasParsedObjects = textObjects.some((t: any) => t.pageIndex === pageIdx);
+            if (hasParsedObjects) {
+              searchStart = idx + 1;
+              continue;
+            }
             const syntheticId = `raw-page-${pageIdx}`;
-            // Only add if not already covered by a parsed textObject
-            // (skip synthetic entries since we can't precisely highlight them without bbox)
             matches.push({
               textObjectId: syntheticId,
               pageIndex: pageIdx,

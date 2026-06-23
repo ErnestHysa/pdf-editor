@@ -46,7 +46,7 @@ export function usePasteHandler() {
                 src: dataUrl,
                 rotation: 0,
                 opacity: 1,
-                objectRef: '',
+                objectRef: 'new',
               });
             };
             img.src = dataUrl;
@@ -74,7 +74,7 @@ export function usePasteHandler() {
         color: '#000000',
         textAlign: 'left',
         rotation: 0,
-        objectRef: '',
+        objectRef: 'new',
       });
     }
   }, []);

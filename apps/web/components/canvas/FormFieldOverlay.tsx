@@ -48,7 +48,7 @@ export const FormFieldOverlay = memo(function FormFieldOverlay({
           ? formFieldValues[a.fieldName]
           : a.fieldValue ?? '';
 
-        const isCheckbox = a.fieldType === 'Btn' || a.fieldType === 'Ch';
+        const isCheckbox = a.fieldType === 'Btn';
         const isRadio = a.fieldType === 'Rd';
 
         if (isCheckbox) {
@@ -91,7 +91,7 @@ export const FormFieldOverlay = memo(function FormFieldOverlay({
               <input
                 type="radio"
                 checked={Boolean(value)}
-                onChange={() => handleChange(a.fieldName, value)}
+                onChange={() => handleChange(a.fieldName, a.fieldValue ?? 'Yes')}
                 style={{ width: '100%', height: '100%', cursor: 'pointer' }}
               />
             </div>

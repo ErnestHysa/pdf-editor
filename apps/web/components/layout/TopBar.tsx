@@ -23,13 +23,16 @@ import {
 
 export function TopBar() {
   const { theme, toggleTheme, toggleLeftSidebar, toggleRightPanel, exportDialogOpen, setExportDialogOpen } = useUIStore();
-  const { undo, redo, canUndo, canRedo, getLastAction } = useHistoryStore();
+  const { undo, redo, canUndo, canRedo } = useHistoryStore();
   const { fileName, isDirty, pdfDocument, activePageIndex, saveStatus, lastSavedAt } = useDocumentStore();
   const { activeTool, setTool } = useToolStore();
+  // Subscribe to history pointer + action count so lastAction stays in sync
+  const historyPointer = useHistoryStore((s) => s.pointer);
+  const historyActionCount = useHistoryStore((s) => s.actions.length);
   const deviceType = useDeviceType();
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const lastAction = getLastAction();
+  const lastAction = useHistoryStore.getState().getLastAction();
 
   // Tool definitions for toolbar
   const toolbarTools = [

@@ -12,12 +12,19 @@ interface TextEditOverlayProps {
 export function TextEditOverlay({ textObject, onClose, onSave }: TextEditOverlayProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState(textObject.content);
+  const hasFocusedRef = useRef(false);
 
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    el.focus();
-    el.select();
+    // Defer focus to next tick so React finishes rendering before
+    // the focus/blur cycle can fire onBlur -> onSave -> unmount
+    const timer = setTimeout(() => {
+      hasFocusedRef.current = true;
+      el.focus();
+      el.select();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -31,6 +38,9 @@ export function TextEditOverlay({ textObject, onClose, onSave }: TextEditOverlay
   };
 
   const handleBlur = () => {
+    // Ignore blur events during initial mount — the textarea
+    // may briefly lose focus before the deferred focus() runs
+    if (!hasFocusedRef.current) return;
     onSave(value);
   };
 
@@ -51,6 +61,7 @@ export function TextEditOverlay({ textObject, onClose, onSave }: TextEditOverlay
         textAlign: textObject.textAlign,
         lineHeight: 1.4,
         borderBottomColor: 'var(--accent)',
+        backgroundColor: '#ffffff',
       }}
       value={value}
       onChange={(e) => setValue(e.target.value)}

@@ -152,8 +152,9 @@ export const PageCanvas = memo(function PageCanvas({
 
   // ── Coordinate helpers ────────────────────────────────────────────
   const getPointerPosition = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0 };
+    // Use e.currentTarget as fallback — it's always the element with the handler
+    const target = containerRef.current || (e.currentTarget as HTMLDivElement);
+    const rect = target.getBoundingClientRect();
     return {
       x: (e.clientX - rect.left) / renderScale,
       y: (e.clientY - rect.top) / renderScale,
@@ -165,15 +166,18 @@ export const PageCanvas = memo(function PageCanvas({
     if (e.button !== 0) return;
     if (isGesturing) return;
 
+    // Read activeTool from store to avoid stale closure after rapid tool switches
+    const currentTool = useToolStore.getState().activeTool;
+
     const pos = getPointerPosition(e);
     setShapeStartPos(pos);
 
-    if (activeTool === 'sticky' || activeTool === 'comment') {
+    if (currentTool === 'sticky' || currentTool === 'comment') {
       touchStartRef.current = pos;
       longPressTimerRef.current = setTimeout(() => {
         touchStartRef.current = null;
-        const id = `${activeTool}-${pageIndex}-${Date.now()}`;
-        if (activeTool === 'sticky') {
+        const id = `${currentTool}-${pageIndex}-${Date.now()}`;
+        if (currentTool === 'sticky') {
           const newSticky: any = {
             id, type: 'sticky', pageIndex,
             x: pos.x - 60, y: pos.y - 30, width: 120, height: 80,
@@ -211,7 +215,7 @@ export const PageCanvas = memo(function PageCanvas({
     }
 
     // Stamp tool: place stamp annotation on click
-    if (activeTool === 'stamp') {
+    if (currentTool === 'stamp') {
       import('@pagecraft/pdf-engine').then(({ buildStampAnnotation }) => {
         const id = `stamp-${pageIndex}-${Date.now()}`;
         const stamp = buildStampAnnotation(
@@ -234,17 +238,17 @@ export const PageCanvas = memo(function PageCanvas({
     }
 
     // Skip draw tool here — DrawingOverlay handles it
-    if (activeTool === 'draw') return;
+    if (currentTool === 'draw') return;
 
-    if (['highlight', 'underline', 'strikethrough'].includes(activeTool)) {
+    if (['highlight', 'underline', 'strikethrough'].includes(currentTool)) {
       const id = `mark-${pageIndex}-${Date.now()}`;
       const newMark: any = {
-        id, type: activeTool as 'highlight' | 'underline' | 'strikethrough',
+        id, type: currentTool as 'highlight' | 'underline' | 'strikethrough',
         pageIndex, x: pos.x, y: pos.y, width: 100, height: 16,
         color: toolOptions.color, opacity: toolOptions.opacity,
       };
       useHistoryStore.getState().push({
-        label: `Add ${activeTool}`,
+        label: `Add ${currentTool}`,
         targetIds: [id],
         type: 'annotation-add',
         objectData: newMark,
@@ -254,7 +258,7 @@ export const PageCanvas = memo(function PageCanvas({
       return;
     }
 
-    if (activeTool === 'text') {
+    if (currentTool === 'text') {
       const id = `text-${pageIndex}-${Date.now()}`;
       const newObj = {
         id, pageIndex,
@@ -279,7 +283,7 @@ export const PageCanvas = memo(function PageCanvas({
       return;
     }
 
-    if (activeTool === 'image') {
+    if (currentTool === 'image') {
       if ((e.target as HTMLElement).closest('[data-image-guard]')) return;
       const input = document.createElement('input');
       input.setAttribute('data-image-guard', 'true');
@@ -308,7 +312,7 @@ export const PageCanvas = memo(function PageCanvas({
       return;
     }
 
-    if (activeTool === 'signature') {
+    if (currentTool === 'signature') {
       const { pendingSignature } = useDocumentStore.getState();
       if (!pendingSignature) {
         useUIStore.getState().setToast('No signature pending — draw or upload one first');
@@ -340,11 +344,11 @@ export const PageCanvas = memo(function PageCanvas({
       return;
     }
 
-    if (['rectangle', 'ellipse', 'line', 'arrow'].includes(activeTool)) {
+    if (['rectangle', 'ellipse', 'line', 'arrow'].includes(currentTool)) {
       setShapePreview({ x: pos.x, y: pos.y, width: 0, height: 0 });
-      shapeToolRef.current = activeTool;
+      shapeToolRef.current = currentTool;
     }
-  }, [activeTool, pageIndex, toolOptions, renderScale, getPointerPosition, isGesturing, onLongPress, addAnnotation, addImageObject]);
+  }, [pageIndex, toolOptions, renderScale, getPointerPosition, isGesturing, onLongPress, addAnnotation, addImageObject]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!shapeStartPos) return;
@@ -414,9 +418,8 @@ export const PageCanvas = memo(function PageCanvas({
   }, [activeTool, pageIndex, toolOptions, shapePreview, getPointerPosition, addAnnotation]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const target = containerRef.current || (e.currentTarget as HTMLDivElement);
+    const rect = target.getBoundingClientRect();
     const pos = {
       x: (e.clientX - rect.left) / renderScale,
       y: (e.clientY - rect.top) / renderScale,

@@ -109,7 +109,7 @@ export function glyphPreservingEdit(
           const escapedNew = newText.replace(/([()*\\])/g, "\\$1");
           const newInner = innerContent.replace(stringPattern, `(${escapedNew})`);
           const newArray = `[${newInner}] TJ`;
-          newContent = contentStr.slice(0, match.index) + tjArray.replace(tjArray.slice(match.index - contentStr.length, match.index - contentStr.length + tjArray.length), newArray) + contentStr.slice(match.index + tjArray.length);
+          newContent = contentStr.slice(0, match.index) + newArray + contentStr.slice(match.index + tjArray.length);
           found = true;
           break;
         }
@@ -121,7 +121,7 @@ export function glyphPreservingEdit(
           const newHex = newText.split("").map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
           const newInner = innerContent.replace(hexPattern, `<${newHex}>`);
           const newArray = `[${newInner}] TJ`;
-          newContent = contentStr.slice(0, match.index) + tjArray.replace(tjArray.slice(match.index - contentStr.length, match.index - contentStr.length + tjArray.length), newArray) + contentStr.slice(match.index + tjArray.length);
+          newContent = contentStr.slice(0, match.index) + newArray + contentStr.slice(match.index + tjArray.length);
           found = true;
           break;
         }

@@ -38,7 +38,9 @@ export const PdfPageCanvas = memo(function PdfPageCanvas({
     (async () => {
       const pdfPage = await pdfJsDoc.getPage(pageIndex + 1);
       if (cancelled) return;
-      const viewport = pdfPage.getViewport({ scale: renderScale, renderInteractiveForms: false });
+      // Multiply by devicePixelRatio for retina sharpness, capped at 2 for performance
+      const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
+      const viewport = pdfPage.getViewport({ scale: renderScale * dpr, renderInteractiveForms: false });
       const canvas = canvasRef.current!;
       canvas.width = viewport.width;
       canvas.height = viewport.height;

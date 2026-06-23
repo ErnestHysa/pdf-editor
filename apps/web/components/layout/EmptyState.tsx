@@ -204,7 +204,7 @@ export function EmptyState({ onFile }: EmptyStateProps) {
             type="file"
             accept=".pdf,application/pdf"
             onChange={handleFileInput}
-            className="hidden"
+            className="sr-only"
           />
           <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors">
             <FileText size={16} />

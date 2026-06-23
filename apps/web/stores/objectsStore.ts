@@ -161,7 +161,7 @@ export const useObjectsStore = create<ObjectsState>()(
         if (state.clipboard.length === 0) return;
         const newObjs: SerializableTextObject[] = state.clipboard.map((obj) => ({
           ...obj,
-          id: `${obj.id}-copy-${Date.now()}`,
+          id: `${obj.id}-copy-${crypto.randomUUID().slice(0, 8)}`,
           x: obj.x + 20,
           y: obj.y + 20,
           objectRef: 'new',
@@ -196,7 +196,7 @@ export const useObjectsStore = create<ObjectsState>()(
           .filter(Boolean) as SerializableTextObject[];
         const newObjs: SerializableTextObject[] = toDuplicate.map((obj) => ({
           ...obj,
-          id: `${obj.id}-dup-${Date.now()}`,
+          id: `${obj.id}-dup-${crypto.randomUUID().slice(0, 8)}`,
           x: obj.x + 20,
           y: obj.y + 20,
           objectRef: 'new',

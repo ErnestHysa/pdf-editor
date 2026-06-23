@@ -130,9 +130,10 @@ export function EditorPage() {
     const pageEl = pageRefs.current[activePageIndex];
     if (!pageEl) return;
     const rect = pageEl.getBoundingClientRect();
-    // Account for zoom, pan offset, and page position in screen coords
-    const screenX = canvasX * zoom + rect.left + panOffset.x;
-    const screenY = canvasY * zoom + rect.top + panOffset.y;
+    // rect already accounts for panOffset via the parent CSS transform;
+    // only multiply by zoom to convert page-space → screen-space
+    const screenX = canvasX * zoom + rect.left;
+    const screenY = canvasY * zoom + rect.top;
     setContextMenu({ x: screenX, y: screenY });
   }, [zoom, activePageIndex, panOffset]);
 
@@ -262,16 +263,17 @@ export function EditorPage() {
 
         // Clear any selected objects whose IDs no longer exist in textObjects (#8)
         const validIds = new Set(allObjects.map(o => o.id));
-        const stale = selectedObjects.filter((o: SelectedObject) => o.type === 'text' && !validIds.has(o.id));
+        const currentSelection = useSelectionStore.getState().selectedObjects;
+        const stale = currentSelection.filter((o: SelectedObject) => o.type === 'text' && !validIds.has(o.id));
         if (stale.length > 0) {
-          clearSelection();
+          useSelectionStore.getState().clearSelection();
         }
       });
     }).catch((err: unknown) => {
       setPdfError(err instanceof Error ? err.message : 'Failed to load PDF');
       setParsingProgress(0);
     });
-  }, [pdfDocument, reloadTrigger, setPdfJsDoc, setTextObjects, selectedObjects, clearSelection, setParsingProgress]);
+  }, [pdfDocument, reloadTrigger, setPdfJsDoc, setTextObjects, setParsingProgress]);
 
   // ── Virtualization: only render active page ± buffer pages ─────
   const VIRTUAL_BUFFER = 3;

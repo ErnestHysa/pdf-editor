@@ -96,19 +96,20 @@ export function ZustandAnnotationView({
     );
   }
 
-  if (annotation.type === 'comment') {
-    
-    const commentIndexMap = useMemo(() => {
-      const map = new Map<string, number>();
-      let num = 0;
-      for (const a of pageAnnotations) {
-        if (a.type === 'comment') {
-          num++;
-          map.set(a.id, num);
-        }
+  // useMemo must be at top level — compute unconditionally, used only for comment type below
+  const commentIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let num = 0;
+    for (const a of pageAnnotations) {
+      if (a.type === 'comment') {
+        num++;
+        map.set(a.id, num);
       }
-      return map;
-    }, [pageAnnotations]);
+    }
+    return map;
+  }, [pageAnnotations]);
+
+  if (annotation.type === 'comment') {
     const commentNumber = commentIndexMap.get(annotation.id) ?? 0;
     const isActive = activeCommentId === annotation.id;
 

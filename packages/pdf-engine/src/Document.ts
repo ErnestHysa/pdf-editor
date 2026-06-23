@@ -49,15 +49,24 @@ export class PdfDocument {
 
   /**
    * Reorder pages: move page at fromIndex to toIndex.
-   * Uses the internal array as canonical order; reindexes on save.
+   * Syncs both in-memory array and pdf-lib's internal page order.
    */
   reorderPages(fromIndex: number, toIndex: number): void {
     if (fromIndex === toIndex) return;
     if (fromIndex < 0 || fromIndex >= this._pages.length) return;
     if (toIndex < 0 || toIndex >= this._pages.length) return;
 
+    // Reorder in-memory array
     const [page] = this._pages.splice(fromIndex, 1);
     this._pages.splice(toIndex, 0, page);
+
+    // Sync pdf-lib's internal page order
+    const libPage = this.pdfLibDoc.getPages()[fromIndex];
+    this.pdfLibDoc.removePage(fromIndex);
+    // After removal, all indices >= fromIndex shift down by 1
+    const adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+    this.pdfLibDoc.insertPage(adjustedToIndex, libPage);
+
     this.reindexPages();
   }
 

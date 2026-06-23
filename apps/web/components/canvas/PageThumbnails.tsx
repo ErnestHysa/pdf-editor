@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useDocumentStore } from "@/stores/documentStore";
 import { cn } from "@/lib/utils";
-import { RotateCcw, RotateCw, Copy, Trash2, Crop } from "lucide-react";
+import { ContextMenu } from "./ContextMenu";
 
 interface PageThumbnailsProps {
   pageCount: number;
@@ -144,7 +144,7 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
         onClick={onSelect}
         onContextMenu={handleContextMenu}
         className={cn(
-          "relative rounded overflow-hidden border transition-all duration-150 flex-shrink-0",
+          "thumbnail relative rounded overflow-hidden border transition-all duration-150 flex-shrink-0",
           "hover:border-border-strong hover:scale-[1.02]",
           isActive ? "border-accent ring-1 ring-accent/30" : "border-border"
         )}
@@ -164,60 +164,21 @@ function ThumbnailSlot({ pageIndex, isActive, onSelect, pdfJsDoc, getPageDimensi
 
       {/* Context menu */}
       {contextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={closeContextMenu}
-            onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}
-          />
-          <div
-            className="fixed z-50 bg-bg-elevated border border-border rounded-lg shadow-xl py-1 min-w-[180px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
-            onContextMenu={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={handleRotateLeft}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
-            >
-              <RotateCcw size={14} />
-              Rotate Left
-            </button>
-            <button
-              onClick={handleRotateRight}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
-            >
-              <RotateCw size={14} />
-              Rotate Right
-            </button>
-            <button
-              onClick={handleDuplicate}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
-            >
-              <Copy size={14} />
-              Duplicate Page
-            </button>
-            <button
-              onClick={handleCrop}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-text-secondary"
-            >
-              <Crop size={14} />
-              Crop This Page
-            </button>
-            {canDelete && (
-              <>
-                <div className="h-px bg-border my-1" />
-                <button
-                  onClick={handleDelete}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-bg-hover flex items-center gap-2 text-destructive"
-                >
-                  <Trash2 size={14} />
-                  Delete Page
-                </button>
-              </>
-            )}
-          </div>
-        </>
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            { label: "Rotate Left", action: handleRotateLeft },
+            { label: "Rotate Right", action: handleRotateRight },
+            { label: "Duplicate Page", action: handleDuplicate },
+            { label: "Crop This Page", action: handleCrop },
+            ...(canDelete ? [
+              { label: "", action: () => {}, divider: true },
+              { label: "Delete Page", action: handleDelete }
+            ] : [])
+          ]}
+          onClose={closeContextMenu}
+        />
       )}
     </>
   );

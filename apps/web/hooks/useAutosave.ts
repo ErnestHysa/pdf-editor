@@ -219,10 +219,12 @@ export function useAutosave() {
 
   // When document becomes dirty, increment edit sequence (#27)
   const prevIsDirty = useRef(false);
-  if (isDirty && !prevIsDirty.current) {
-    editSequenceRef.current += 1;
-  }
-  prevIsDirty.current = isDirty;
+  useEffect(() => {
+    if (isDirty && !prevIsDirty.current) {
+      editSequenceRef.current += 1;
+    }
+    prevIsDirty.current = isDirty;
+  }, [isDirty]);
 
   // Beforeunload guard
   useEffect(() => {

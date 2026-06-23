@@ -325,6 +325,10 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         executeRedo: buildExecuteRedo(data),
       };
       actions.push(newAction);
+      // Enforce maxSize — trim oldest actions when over limit
+      while (actions.length > state.maxSize) {
+        actions.shift();
+      }
       return { actions, pointer: actions.length - 1 };
     }),
 
